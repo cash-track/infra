@@ -30,10 +30,10 @@ spec:
               subPath: mysql
           resources:
             requests:
-              cpu: 500m
+              cpu: 300m
               memory: 800Mi
             limits:
-              cpu: 500m
+              cpu: 300m
               memory: 800Mi
           envFrom:
             - secretRef:
