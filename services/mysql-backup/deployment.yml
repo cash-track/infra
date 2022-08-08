@@ -20,7 +20,14 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: backup
-          image: cashtrack/mysql-backup:0.0.4
+          image: cashtrack/mysql-backup:latest
+          resources:
+            requests:
+              cpu: 200m
+              memory: 50Mi
+            limits:
+              cpu: 300m
+              memory: 100Mi
           envFrom:
             - configMapRef:
                 name: mysql-backup-config

@@ -20,7 +20,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: mysql
-          image: cashtrack/mysql:1.0.8
+          image: cashtrack/mysql:latest
           ports:
             - containerPort: 3306
               name: mysql
@@ -28,6 +28,13 @@ spec:
             - mountPath: /var/lib/mysql
               name: data
               subPath: mysql
+          resources:
+            requests:
+              cpu: 500m
+              memory: 800Mi
+            limits:
+              cpu: 500m
+              memory: 800Mi
           envFrom:
             - secretRef:
                 name: mysql-secret

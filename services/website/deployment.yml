@@ -20,7 +20,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: website
-          image: cashtrack/website:0.1.14
+          image: cashtrack/website:latest
           ports:
             - containerPort: 3000
               name: nuxt
@@ -31,6 +31,13 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 3000
+          resources:
+            requests:
+              cpu: 50m
+              memory: 300m
+            limits:
+              cpu: 200m
+              memory: 400m
           env:
             - name: BASE_URL
               valueFrom:
