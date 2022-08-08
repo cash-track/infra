@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: api
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: api
+      namespace: cash-track
+      labels:
+        app: api
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: api
+          image: cashtrack/api:1.1.4
+          ports:
+            - containerPort: 8080
+              name: http
+          livenessProbe:
+            httpGet:
+              port: 8080
+              path: /healthcheck
+          readinessProbe:
+            tcpSocket:
+              port: 8080
+          envFrom:
+            - secretRef:
+                name: common-secret
+            - configMapRef:
+                name: api-config
+            - secretRef:
+                name: api-secret
+          env:
+            - name: APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: API_URL
+                  name: common-config
+            - name: WEBSITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBSITE_URL
+                  name: common-config
+            - name: WEB_APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBAPP_URL
+                  name: common-config
+            - name: DB_HOST
+              value: mysql:3306
+            - name: DB_NAME
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_DATABASE
+                  name: mysql-secret
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_USER
+                  name: mysql-secret
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_PASSWORD
+                  name: mysql-secret

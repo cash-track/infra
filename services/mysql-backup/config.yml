@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mysql-backup-config
+  namespace: cash-track
+data:
+  S3_ENDPOINT: https://ams3.digitaloceanspaces.com
+  S3_BUCKET: cash-track-backups
