@@ -1,0 +1,10 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: common-config
+  namespace: cash-track
+data:
+  API_URL: https://api.cash-track.app
+  WEBSITE_URL: https://cash-track.app
+  WEBAPP_URL: https://my.cash-track.app
+  GOOGLE_ANALYTICS_ID: UA-28063621-2

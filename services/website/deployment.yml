@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: website
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: website
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: website
+      labels:
+        app: website
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: website
+          image: cashtrack/website:0.1.14
+          ports:
+            - containerPort: 3000
+              name: nuxt
+          livenessProbe:
+            httpGet:
+              port: 3000
+              path: /
+          readinessProbe:
+            tcpSocket:
+              port: 3000
+          env:
+            - name: BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBSITE_URL
+                  name: common-config
+            - name: API_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: API_URL
+                  name: common-config
+            - name: WEB_APP_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBAPP_URL
+                  name: common-config
+            - name: GOOGLE_ANALYTICS_ID
+              valueFrom:
+                configMapKeyRef:
+                  key: GOOGLE_ANALYTICS_ID
+                  name: common-config
+            - name: CAPTCHA_CLIENT_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CAPTCHA_CLIENT_KEY
+                  name: common-secret
+            - name: CAPTCHA_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CAPTCHA_SECRET_KEY
+                  name: common-secret
+

@@ -1,0 +1,53 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-backup
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: mysql-backup
+  replicas: 1
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: mysql-backup
+      labels:
+        app: mysql-backup
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: backup
+          image: cashtrack/mysql-backup:0.0.4
+          envFrom:
+            - configMapRef:
+                name: mysql-backup-config
+          env:
+            - name: MYSQL_HOST
+              value: mysql
+            - name: MYSQL_PORT
+              value: '3306'
+            - name: MYSQL_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_DATABASE
+                  name: mysql-secret
+            - name: MYSQL_USER
+              value: root
+            - name: MYSQL_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  key: MYSQL_ROOT_PASSWORD
+                  name: mysql-secret
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  key: S3_KEY
+                  name: common-secret
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: S3_SECRET
+                  name: common-secret

@@ -1,0 +1,17 @@
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: production-issuer
+  namespace: cash-track
+spec:
+  acme:
+    server: https://acme-v02.api.letsencrypt.org/directory
+    email: vovikems@gmail.com
+    privateKeySecretRef:
+      name: letsencrypt-production
+    solvers:
+      - dns01:
+          cloudflare:
+            apiTokenSecretRef:
+              name: cloudflare-secret
+              key: api-token

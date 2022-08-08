@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: frontend
+      labels:
+        app: frontend
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: frontend
+          image: cashtrack/frontend:1.1.4
+          ports:
+            - containerPort: 80
+              name: vuejs
+          livenessProbe:
+            httpGet:
+              port: 80
+              path: /
+          readinessProbe:
+            tcpSocket:
+              port: 80
+          env:
+            - name: VUE_APP_BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBAPP_URL
+                  name: common-config
+            - name: VUE_APP_API_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: API_URL
+                  name: common-config
+            - name: VUE_APP_WEBSITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBSITE_URL
+                  name: common-config
