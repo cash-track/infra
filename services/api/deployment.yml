@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: api
-          image: cashtrack/api:1.1.4
+          image: cashtrack/api:latest
           ports:
             - containerPort: 8080
               name: http
@@ -32,6 +32,13 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 8080
+          resources:
+            requests:
+              cpu: 50m
+              memory: 100Mi
+            limits:
+              cpu: 200m
+              memory: 200Mi
           envFrom:
             - secretRef:
                 name: common-secret

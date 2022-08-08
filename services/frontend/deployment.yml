@@ -20,7 +20,7 @@ spec:
       automountServiceAccountToken: false
       containers:
         - name: frontend
-          image: cashtrack/frontend:1.1.4
+          image: cashtrack/frontend:latest
           ports:
             - containerPort: 80
               name: vuejs
@@ -31,6 +31,13 @@ spec:
           readinessProbe:
             tcpSocket:
               port: 80
+          resources:
+            requests:
+              cpu: 20m
+              memory: 50Mi
+            limits:
+              cpu: 30m
+              memory: 100Mi
           env:
             - name: VUE_APP_BASE_URL
               valueFrom:
