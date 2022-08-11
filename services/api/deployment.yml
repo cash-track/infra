@@ -9,7 +9,7 @@ spec:
       app: api
   replicas: 2
   strategy:
-    type: RollingUpdate3
+    type: RollingUpdate
   revisionHistoryLimit: 3
   template:
     metadata:
