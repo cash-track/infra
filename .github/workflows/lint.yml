@@ -45,7 +45,7 @@ jobs:
       - name: Fetch latest tag
         id: latest_tag
         env:
-          COMMAND: git ls-remote --refs --sort='version:refname' --tags ${{ GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//"
+          COMMAND: git ls-remote --refs --sort="version:refname" --tags ${GIT_REPO} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//"
         run: echo "::set-output name=tag::$($COMMAND)"
 
       - name: Update deployment
