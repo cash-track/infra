@@ -3,6 +3,9 @@ name: lint
 on:
   pull_request:
 
+env:
+  CLUSTER: k8s-cash-track
+
 jobs:
   common:
     name: common
