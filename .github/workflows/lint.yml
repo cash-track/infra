@@ -40,11 +40,11 @@ jobs:
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
       - name: Fetch latest tag
-        id: tag
-        run: git ls-remote --refs --sort="version:refname" --tags https://github.com/cash-track/api | cut -d/ -f3- | tail -n1
+        id: latest_tag
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags https://github.com/cash-track/api | cut -d/ -f3- | tail -n1)"
 
       - name: Verify latest tag
-        run: echo ${{ steps.tag.outputs }}
+        run: echo ${{ steps.latest_tag.outputs.tag }}
 
       - name: Dry run
         run: kubectl apply --dry-run=server -f services/api/
