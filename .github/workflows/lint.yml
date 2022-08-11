@@ -41,7 +41,7 @@ jobs:
 
       - name: Fetch latest tag
         id: latest_tag
-        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags https://github.com/cash-track/api | cut -d/ -f3- | tail -n1)"
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags https://github.com/cash-track/api | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
 
       - name: Verify latest tag
         run: echo ${{ steps.latest_tag.outputs.tag }}
