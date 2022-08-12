@@ -20,6 +20,18 @@ $ kubectl config use-context prod
 ```
 
 
+## Configure cluster
+
+For DigitalOcean managed cluster:
+
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.3.0/deploy/static/provider/do/deploy.yaml
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.9.1/cert-manager.yaml
+$ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+$ kubectl apply -f https://github.com/actions-runner-controller/actions-runner-controller/releases/download/v0.20.2/actions-runner-controller.yaml
+```
+
+
 ## Production
 
 Namespace: `cash-track`.
@@ -31,6 +43,7 @@ Generate secrets definition
 ```shell
 $ cp common/configs/.secret.yml.example common/configs/secret.yml
 $ cp common/configs/.cloudflare-secret.yml.example common/configs/cloudflare-secret.yml
+$ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runner/github-runner-secret.yml
 $ cp services/api/.secret.yml.example services/api/secret.yml
 $ cp services/mysql/.secret.yml.example services/mysql/secret.yml
 ```
@@ -39,6 +52,7 @@ Configure values for every created files
 
 - `common/configs/secret.yml`
 - `common/configs/cloudflare-secret.yml`
+- `common/actions-runner/github-runner-secret.yml`
 - `services/api/secret.yml`
 - `services/mysql/secret.yml`
 
@@ -138,7 +152,5 @@ $ kubectl exec deployment/mysql-backup -it -- php app.php clear --days=7
 $ kubectl port-forward service/mysql 33060:3306               # Connect to MySQL from local
 $ kubectl exec pods/mysql-0 -it -- bash                       # SSH into a Pod
 $ kubectl exec pods/mysql-0 --container backup -it -- bash    # SSH into a specific container of a Pod
-
-$ git ls-remote --refs --sort="version:refname" --tags https://github.com/cash-track/mysql | cut -d/ -f3- | tail -n1
 ```
 
