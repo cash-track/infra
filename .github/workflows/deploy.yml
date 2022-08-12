@@ -1,0 +1,227 @@
+name: deploy
+
+on:
+  push:
+    branches:
+      - main
+  release:
+    types: [ published ]
+
+env:
+  CLUSTER: k8s-cash-track
+  NAMESPACE: cash-track
+
+jobs:
+  common:
+    name: common
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Apply
+        run: kubectl apply -R -f $GITHUB_WORKSPACE/common/
+
+  mysql:
+    name: mysql
+    runs-on: ubuntu-latest
+    needs:
+      - common
+    env:
+      REPO: cashtrack/mysql
+      GIT_REPO: https://github.com/cash-track/mysql
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch current release
+        id: release
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/mysql/statefulset.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/mysql/
+
+      - name: Deploy service
+        run: kubectl -n ${{ env.NAMESPACE }} delete pod mysql-0
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql --for condition=Ready --timeout=60s
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    needs:
+      - mysql
+    env:
+      REPO: cashtrack/api
+      GIT_REPO: https://github.com/cash-track/api
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch current release
+        id: release
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/api/deployment.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/api/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/api
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=api --for condition=Ready --timeout=30s
+
+      - name: Clear cache
+        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -it -- php app.php cache:clean
+
+      - name: Clear cache
+        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -it -- php app.php migrate
+
+  website:
+    name: website
+    runs-on: ubuntu-latest
+    needs:
+      - api
+    env:
+      REPO: cashtrack/website
+      GIT_REPO: https://github.com/cash-track/website
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch current release
+        id: release
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/website/deployment.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/website/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/website
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=website --for condition=Ready --timeout=30s
+
+  frontend:
+    name: frontend
+    runs-on: ubuntu-latest
+    needs:
+      - api
+    env:
+      REPO: cashtrack/frontend
+      GIT_REPO: https://github.com/cash-track/frontend
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch current release
+        id: release
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/frontend/deployment.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/frontend/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/frontend
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=frontend --for condition=Ready --timeout=30s
+
+  mysql-backup:
+    name: mysql-backup
+    runs-on: ubuntu-latest
+    needs:
+      - mysql
+    env:
+      REPO: cashtrack/mysql-backup
+      GIT_REPO: https://github.com/cash-track/mysql-backup
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch current release
+        id: release
+        run: echo "::set-output name=tag::$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")"
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/mysql-backup/deployment.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/mysql-backup/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/mysql-backup
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=30s
