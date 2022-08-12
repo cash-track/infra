@@ -9,7 +9,7 @@ env:
 jobs:
   common:
     name: common
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -26,7 +26,7 @@ jobs:
         run: kubectl apply --dry-run=server -R -f common/
   api:
     name: api
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       REPO: cashtrack/api
       GIT_REPO: https://github.com/cash-track/api
@@ -56,7 +56,7 @@ jobs:
 
   mysql:
     name: mysql
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       REPO: cashtrack/mysql
       GIT_REPO: https://github.com/cash-track/mysql
@@ -86,7 +86,7 @@ jobs:
 
   website:
     name: website
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       REPO: cashtrack/website
       GIT_REPO: https://github.com/cash-track/website
@@ -116,7 +116,7 @@ jobs:
 
   frontend:
     name: frontend
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       REPO: cashtrack/frontend
       GIT_REPO: https://github.com/cash-track/frontend
@@ -146,7 +146,7 @@ jobs:
 
   mysql-backup:
     name: mysql-backup
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     env:
       REPO: cashtrack/mysql-backup
       GIT_REPO: https://github.com/cash-track/mysql-backup
