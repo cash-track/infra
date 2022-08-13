@@ -20,6 +20,50 @@ $ kubectl config use-context prod
 ```
 
 
+## Dependencies
+
+DigitalOcean managed cluster is used.
+
+
+### Nginx Ingress
+
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.3.0/deploy/static/provider/do/deploy.yaml
+```
+
+
+### Cert Manager
+
+```shell
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.9.1/cert-manager.yaml
+```
+
+
+### Metrics Server
+
+```shell
+$ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+
+### GitHub Actions Runner Controller
+
+```shell
+$ helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+$ helm upgrade --install --namespace actions-runner-system --create-namespace \
+             --wait actions-runner-controller actions-runner-controller/actions-runner-controller \
+             --set "githubWebhookServer.enabled=true"
+```
+
+Generate secret
+
+```shell
+$ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runner/github-runner-secret.yml
+```
+
+Add GitHub personal access token to `common/actions-runner/github-runner-secret.yml`. Make sure you added all required permissions (see https://github.com/actions-runner-controller/actions-runner-controller#deploying-using-pat-authentication).
+
+
 ## Production
 
 Namespace: `cash-track`.
@@ -138,7 +182,5 @@ $ kubectl exec deployment/mysql-backup -it -- php app.php clear --days=7
 $ kubectl port-forward service/mysql 33060:3306               # Connect to MySQL from local
 $ kubectl exec pods/mysql-0 -it -- bash                       # SSH into a Pod
 $ kubectl exec pods/mysql-0 --container backup -it -- bash    # SSH into a specific container of a Pod
-
-$ git ls-remote --refs --sort="version:refname" --tags https://github.com/cash-track/mysql | cut -d/ -f3- | tail -n1
 ```
 

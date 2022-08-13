@@ -5,11 +5,12 @@ on:
 
 env:
   CLUSTER: k8s-cash-track
+  KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.23.9/bin/linux/amd64/kubectl
 
 jobs:
   common:
     name: common
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -19,6 +20,12 @@ jobs:
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
 
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
@@ -26,7 +33,7 @@ jobs:
         run: kubectl apply --dry-run=server -R -f common/
   api:
     name: api
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     env:
       REPO: cashtrack/api
       GIT_REPO: https://github.com/cash-track/api
@@ -38,6 +45,12 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
@@ -56,7 +69,7 @@ jobs:
 
   mysql:
     name: mysql
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     env:
       REPO: cashtrack/mysql
       GIT_REPO: https://github.com/cash-track/mysql
@@ -68,6 +81,12 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
@@ -86,7 +105,7 @@ jobs:
 
   website:
     name: website
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     env:
       REPO: cashtrack/website
       GIT_REPO: https://github.com/cash-track/website
@@ -98,6 +117,12 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
@@ -116,7 +141,7 @@ jobs:
 
   frontend:
     name: frontend
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     env:
       REPO: cashtrack/frontend
       GIT_REPO: https://github.com/cash-track/frontend
@@ -128,6 +153,12 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
@@ -146,7 +177,7 @@ jobs:
 
   mysql-backup:
     name: mysql-backup
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, x64]
     env:
       REPO: cashtrack/mysql-backup
       GIT_REPO: https://github.com/cash-track/mysql-backup
@@ -158,6 +189,12 @@ jobs:
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
 
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
