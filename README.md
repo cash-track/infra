@@ -1,5 +1,7 @@
 # Infrastructure Definition
 
+[![deploy](https://github.com/cash-track/infra/actions/workflows/deploy.yml/badge.svg?branch=main&event=push)](https://github.com/cash-track/infra/actions/workflows/deploy.yml)
+
 ## Configure kubectl using doctl
 
 ```shell
