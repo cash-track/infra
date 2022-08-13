@@ -2,7 +2,7 @@ apiVersion: actions.summerwind.dev/v1alpha1
 kind: RunnerDeployment
 metadata:
   name: github-actions-runner
-  namespace: actions-runner-system
+  namespace: cash-track
 spec:
   template:
     spec:
@@ -17,14 +17,14 @@ apiVersion: actions.summerwind.dev/v1alpha1
 kind: HorizontalRunnerAutoscaler
 metadata:
   name: github-actions-runner-autoscaler
-  namespace: actions-runner-system
+  namespace: cash-track
 spec:
   # Runners in the targeted RunnerDeployment won't be scaled down
   # for 5 minutes instead of the default 10 minutes now
-  scaleDownDelaySecondsAfterScaleOut: 300
+  scaleDownDelaySecondsAfterScaleOut: 60
   scaleTargetRef:
     name: github-actions-runner
-  minReplicas: 0
+  minReplicas: 1
   maxReplicas: 10
   scaleUpTriggers:
     - githubEvent:
