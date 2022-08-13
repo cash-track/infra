@@ -20,16 +20,48 @@ $ kubectl config use-context prod
 ```
 
 
-## Configure cluster
+## Dependencies
 
-For DigitalOcean managed cluster:
+DigitalOcean managed cluster is used.
+
+
+### Nginx Ingress
 
 ```shell
 $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.3.0/deploy/static/provider/do/deploy.yaml
-$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.9.1/cert-manager.yaml
-$ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
-$ kubectl apply -f https://github.com/actions-runner-controller/actions-runner-controller/releases/download/v0.20.2/actions-runner-controller.yaml
 ```
+
+
+### Cert Manager
+
+```shell
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.9.1/cert-manager.yaml
+```
+
+
+### Metrics Server
+
+```shell
+$ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+```
+
+
+### GitHub Actions Runner Controller
+
+```shell
+$ helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+$ helm upgrade --install --namespace actions-runner-system --create-namespace \
+             --wait actions-runner-controller actions-runner-controller/actions-runner-controller \
+             --set "githubWebhookServer.enabled=true"
+```
+
+Generate secret
+
+```shell
+$ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runner/github-runner-secret.yml
+```
+
+Add GitHub personal access token to `common/actions-runner/github-runner-secret.yml`. Make sure you added all required permissions (see https://github.com/actions-runner-controller/actions-runner-controller#deploying-using-pat-authentication).
 
 
 ## Production
@@ -43,7 +75,6 @@ Generate secrets definition
 ```shell
 $ cp common/configs/.secret.yml.example common/configs/secret.yml
 $ cp common/configs/.cloudflare-secret.yml.example common/configs/cloudflare-secret.yml
-$ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runner/github-runner-secret.yml
 $ cp services/api/.secret.yml.example services/api/secret.yml
 $ cp services/mysql/.secret.yml.example services/mysql/secret.yml
 ```
@@ -52,7 +83,6 @@ Configure values for every created files
 
 - `common/configs/secret.yml`
 - `common/configs/cloudflare-secret.yml`
-- `common/actions-runner/github-runner-secret.yml`
 - `services/api/secret.yml`
 - `services/mysql/secret.yml`
 
