@@ -14,7 +14,7 @@ env:
 jobs:
   common:
     name: common
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v2
@@ -32,7 +32,7 @@ jobs:
 
   mysql:
     name: mysql
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     needs:
       - common
     env:
@@ -70,7 +70,7 @@ jobs:
 
   api:
     name: api
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     needs:
       - mysql
     env:
@@ -114,7 +114,7 @@ jobs:
 
   website:
     name: website
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     needs:
       - api
     env:
@@ -152,7 +152,7 @@ jobs:
 
   frontend:
     name: frontend
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     needs:
       - api
     env:
@@ -190,7 +190,7 @@ jobs:
 
   mysql-backup:
     name: mysql-backup
-    runs-on: self-hosted
+    runs-on: [self-hosted, Linux, x64]
     needs:
       - mysql
     env:
