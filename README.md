@@ -100,6 +100,9 @@ $ echo -n 'admin' | base64
 ```shell
 $ kubectl apply -f ./common/namespace.yml
 $ kubectl apply -R -f ./common
+$ kubectl apply -f ./services/prometheus
+$ kubectl apply -f ./services/node-exporter
+$ kubectl apply -f ./services/grafana
 $ kubectl apply -f ./services/mysql 
 $ kubectl apply -f ./services/mysql-backup 
 $ kubectl apply -f ./services/api
