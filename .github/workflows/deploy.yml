@@ -357,7 +357,7 @@ jobs:
         run: kubectl apply -f $GITHUB_WORKSPACE/services/node-exporter/
 
       - name: Verify deployment
-        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/node-exporter
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/node-exporter
 
       - name: Verify service ready
         run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=node-exporter --for condition=Ready --timeout=30s
