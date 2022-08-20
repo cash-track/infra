@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mysql-exporter
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: mysql-exporter
+  replicas: 1
+  strategy:
+    type: Recreate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: mysql-exporter
+      labels:
+        app: mysql-exporter
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: mysql-exporter
+          image: prom/mysqld-exporter:v0.14.0
+          resources:
+            requests:
+              cpu: 50m
+              memory: 50Mi
+            limits:
+              cpu: 100m
+              memory: 100Mi
+          ports:
+            - containerPort: 9104
+              name: prometheus
+          env:
+            - name: DATA_SOURCE_NAME
+              valueFrom:
+                secretKeyRef:
+                  key: DATA_SOURCE_NAME
+                  name: mysql-exporter-secret
+

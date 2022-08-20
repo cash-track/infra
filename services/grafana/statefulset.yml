@@ -17,6 +17,7 @@ spec:
       labels:
         app: grafana
     spec:
+      automountServiceAccountToken: false
       securityContext:
         fsGroup: 472
         supplementalGroups:
