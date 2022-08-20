@@ -31,4 +31,7 @@ data:
           - source_labels: [__meta_kubernetes_endpoints_name]
             regex: 'node-exporter'
             action: keep
+      - job_name: 'mysql-exporter'
+        static_configs:
+          - targets: ['mysql-exporter.cash-track:9104']
             
