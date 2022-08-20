@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: prometheus
+  serviceName: prometheus
+  replicas: 1
+  revisionHistoryLimit: 3
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      initContainers:
+        - name: prometheus-data-permission-fix
+          image: busybox
+          command: ["/bin/chmod", "-R", "777", "/prometheus"]
+          volumeMounts:
+            - mountPath: /prometheus
+              name: prometheus-data
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.38.0
+          ports:
+            - containerPort: 9090
+              name: prometheus
+          volumeMounts:
+            - mountPath: /prometheus
+              name: prometheus-data
+            - mountPath: /etc/prometheus/prometheus.yml
+              name: prometheus-config
+              subPath: prometheus.yml
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              cpu: 300m
+              memory: 500Mi
+          livenessProbe:
+            httpGet:
+              port: 9090
+              path: /-/healthy
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              port: 9090
+              path: /-/ready
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+      volumes:
+        - name: prometheus-config
+          configMap:
+            name: prometheus-config
+  volumeClaimTemplates:
+    - metadata:
+        name: prometheus-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

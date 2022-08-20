@@ -25,6 +25,8 @@ spec:
           ports:
             - containerPort: 8080
               name: http
+            - containerPort: 2112
+              name: prometheus
           livenessProbe:
             httpGet:
               port: 8080

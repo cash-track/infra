@@ -30,7 +30,11 @@ jobs:
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
       - name: Dry run
-        run: kubectl apply --dry-run=server -R -f common/
+        run: |
+          kubectl apply --dry-run=server -R -f common/
+          kubectl apply --dry-run=server -f services/prometheus/
+          kubectl apply --dry-run=server -f services/node-exporter/
+          kubectl apply --dry-run=server -f services/grafana/
   api:
     name: api
     runs-on: [self-hosted, Linux, x64]
