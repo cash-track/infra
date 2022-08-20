@@ -126,10 +126,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=api --for condition=Ready --timeout=30s
 
       - name: Clear cache
-        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -it -- php app.php cache:clean
-
-      - name: Clear cache
-        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -it -- php app.php migrate
+        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -i -- php app.php migrate
 
   website:
     name: website
@@ -262,3 +259,106 @@ jobs:
 
       - name: Verify service ready
         run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=30s
+
+  prometheus:
+    name: prometheus
+    runs-on: [ self-hosted, Linux, x64 ]
+    needs:
+      - common
+    env:
+      NAMESPACE: monitoring
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/prometheus/
+
+      - name: Deploy service
+        run: kubectl -n ${{ env.NAMESPACE }} delete pod prometheus-0
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=prometheus --for condition=Ready --timeout=60s
+
+  grafana:
+    name: grafana
+    runs-on: [ self-hosted, Linux, x64 ]
+    needs:
+      - common
+    env:
+      NAMESPACE: monitoring
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/grafana/
+
+      - name: Deploy service
+        run: kubectl -n ${{ env.NAMESPACE }} delete pod grafana-0
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=grafana --for condition=Ready --timeout=60s
+
+  node-exporter:
+    name: node-exporter
+    runs-on: [ self-hosted, Linux, x64 ]
+    needs:
+      - common
+    env:
+      NAMESPACE: monitoring
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v2
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/node-exporter/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/node-exporter
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=node-exporter --for condition=Ready --timeout=30s
+
