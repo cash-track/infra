@@ -79,6 +79,7 @@ $ cp common/configs/.secret.yml.example common/configs/secret.yml
 $ cp common/configs/.cloudflare-secret.yml.example common/configs/cloudflare-secret.yml
 $ cp services/api/.secret.yml.example services/api/secret.yml
 $ cp services/mysql/.secret.yml.example services/mysql/secret.yml
+$ cp services/mysql-exporter/.secret.yml.example services/mysql-exporter/secret.yml
 ```
 
 Configure values for every created files
@@ -87,6 +88,7 @@ Configure values for every created files
 - `common/configs/cloudflare-secret.yml`
 - `services/api/secret.yml`
 - `services/mysql/secret.yml`
+- `services/mysql-exporter/secret.yml`
 
 Every `data` value of a secret must be BASE64 encoded:
 
@@ -105,10 +107,10 @@ $ kubectl apply -f ./services/node-exporter
 $ kubectl apply -f ./services/grafana
 $ kubectl apply -f ./services/mysql 
 $ kubectl apply -f ./services/mysql-backup 
+$ kubectl apply -f ./services/mysql-exporter 
 $ kubectl apply -f ./services/api
 $ kubectl apply -f ./services/website
 $ kubectl apply -f ./services/frontend
-$ kubectl exec deployments/api -it -- php app.php cache:clean
 $ kubectl exec deployments/api -it -- php app.php migrate
 ```
 
