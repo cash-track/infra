@@ -42,7 +42,7 @@ spec:
               memory: 200Mi
             limits:
               cpu: 300m
-              memory: 500Mi
+              memory: 800Mi
           livenessProbe:
             httpGet:
               port: 9090
@@ -69,4 +69,4 @@ spec:
           - ReadWriteOnce
         resources:
           requests:
-            storage: 1Gi
+            storage: 10Gi
