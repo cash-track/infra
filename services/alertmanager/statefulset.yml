@@ -1,0 +1,81 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: alertmanager
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: alertmanager
+  serviceName: alertmanager
+  replicas: 1
+  revisionHistoryLimit: 3
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: alertmanager
+    spec:
+      automountServiceAccountToken: false
+      initContainers:
+        - name: alertmanager-data-permission-fix
+          image: busybox
+          command: [ "/bin/chmod", "-R", "777", "/alertmanager" ]
+          volumeMounts:
+            - mountPath: /alertmanager
+              name: alertmanager-data
+      containers:
+        - name: alertmanager
+          image: prom/alertmanager:v0.24.0
+          args:
+            - --cluster.listen-address=
+            - --config.file=/etc/alertmanager/config.yml
+            - --storage.path=/alertmanager
+          ports:
+            - containerPort: 9093
+              name: alertmanager
+          volumeMounts:
+            - mountPath: /alertmanager
+              name: alertmanager-data
+            - mountPath: /etc/alertmanager
+              name: alertmanager-configs
+#            - mountPath: /etc/alertmanager-templates
+#              name: alertmanager-templates
+          resources:
+            requests:
+              cpu: 100m
+              memory: 100Mi
+            limits:
+              cpu: 300m
+              memory: 300Mi
+          livenessProbe:
+            httpGet:
+              port: 9093
+              path: /-/healthy
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              port: 9093
+              path: /-/ready
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+      volumes:
+        - name: alertmanager-configs
+          configMap:
+            name: alertmanager-configs
+#        - name: alertmanager-templates
+#          configMap:
+#            name: alertmanager-templates
+  volumeClaimTemplates:
+    - metadata:
+        name: alertmanager-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 1Gi

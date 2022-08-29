@@ -100,11 +100,17 @@ $ echo -n 'admin' | base64
 ### Setup
 
 ```shell
+$ kubectl create -n monitoring configmap prometheus-configs --from-file=./services/prometheus/configs -o yaml --dry-run=client | kubectl apply -f -
+$ kubectl create -n monitoring configmap alertmanager-configs --from-file=./services/alertmanager/configs -o yaml --dry-run=client | kubectl apply -f -
+```
+
+```shell
 $ kubectl apply -f ./common/namespace.yml
 $ kubectl apply -R -f ./common
 $ kubectl apply -f ./services/prometheus
 $ kubectl apply -f ./services/node-exporter
 $ kubectl apply -f ./services/grafana
+$ kubectl apply -f ./services/alertmanager
 $ kubectl apply -f ./services/mysql 
 $ kubectl apply -f ./services/mysql-backup 
 $ kubectl apply -f ./services/mysql-exporter 

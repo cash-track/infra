@@ -36,6 +36,7 @@ jobs:
           kubectl apply --dry-run=server -f services/node-exporter/
           kubectl apply --dry-run=server -f services/grafana/
           kubectl apply --dry-run=server -f services/mysql-exporter/
+          kubectl apply --dry-run=server -f services/alertmanager/
   api:
     name: api
     runs-on: [self-hosted, Linux, x64]
