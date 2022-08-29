@@ -1,0 +1,18 @@
+global:
+templates:
+  - '/etc/alertmanager/template/*.tmpl'
+
+route:
+  receiver: telegram
+  group_by: ['alertname', 'priority']
+  group_wait: 10s
+  repeat_interval: 30m
+  routes:
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token: <TELEGRAM_ALERT_BOT_TOKEN>
+        chat_id: <TELEGRAM_MONITORING_CHAT_ID>
+        api_url: https://api.telegram.org
+        parse_mode: HTML
