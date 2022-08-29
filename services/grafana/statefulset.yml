@@ -32,7 +32,7 @@ spec:
             - mountPath: /var/lib/grafana
               name: grafana-data
             - mountPath: /etc/grafana
-              name: grafana-config
+              name: grafana-configs
           resources:
             requests:
               cpu: 100m
@@ -54,9 +54,9 @@ spec:
             periodSeconds: 2
             timeoutSeconds: 1
       volumes:
-        - name: grafana-config
+        - name: grafana-configs
           configMap:
-            name: grafana-config
+            name: grafana-configs
   volumeClaimTemplates:
     - metadata:
         name: grafana-data
