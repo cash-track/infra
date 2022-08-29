@@ -33,9 +33,8 @@ spec:
           volumeMounts:
             - mountPath: /prometheus
               name: prometheus-data
-            - mountPath: /etc/prometheus/prometheus.yml
-              name: prometheus-config
-              subPath: prometheus.yml
+            - mountPath: /etc/prometheus
+              name: prometheus-configs
           resources:
             requests:
               cpu: 100m
@@ -58,9 +57,9 @@ spec:
             periodSeconds: 2
             timeoutSeconds: 1
       volumes:
-        - name: prometheus-config
+        - name: prometheus-configs
           configMap:
-            name: prometheus-config
+            name: prometheus-configs
   volumeClaimTemplates:
     - metadata:
         name: prometheus-data
