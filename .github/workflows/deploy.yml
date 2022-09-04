@@ -125,8 +125,8 @@ jobs:
       - name: Verify service ready
         run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=api --for condition=Ready --timeout=30s
 
-      - name: Clear cache
-        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -i -- php app.php migrate
+      - name: Migrate database
+        run: kubectl -n ${{ env.NAMESPACE }} exec deployments/api -- php app.php migrate -s
 
   website:
     name: website
