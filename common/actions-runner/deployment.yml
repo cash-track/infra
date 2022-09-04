@@ -27,7 +27,7 @@ spec:
   scaleTargetRef:
     name: github-actions-runner
   minReplicas: 1
-  maxReplicas: 10
+  maxReplicas: 6
   scaleUpTriggers:
     - githubEvent:
         workflowJob: {}
