@@ -1,6 +1,7 @@
 global:
 templates:
   - '/etc/alertmanager/template/*.tmpl'
+  - '/etc/alertmanager/*.tmpl'
 
 route:
   receiver: telegram
@@ -16,3 +17,4 @@ receivers:
         chat_id: <TELEGRAM_MONITORING_CHAT_ID>
         api_url: https://api.telegram.org
         parse_mode: HTML
+        message: '{{ template "telegram.cash-track.message" .}}'
