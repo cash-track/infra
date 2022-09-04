@@ -1,0 +1,27 @@
+{{ define "telegram.alert-firing.list" }}{{ range . }}🚨<b>{{ .Labels.alertname }}</b> ({{ .Labels.severity }})
+▪️{{ .Annotations.summary }}
+▪️{{ .Annotations.description }}
+
+{{ end }}
+{{ end }}
+
+{{ define "telegram.alert-resolved.list" }}{{ range . }}✅<b>{{ .Labels.alertname }}</b> ({{ .Labels.severity }})
+▪️{{ .Annotations.summary }}
+▪️{{ .Annotations.description }}
+
+{{ end }}
+{{ end }}
+
+{{ define "telegram.cash-track.message" }}
+{{ if gt (len .Alerts.Firing) 0 }}
+Alerts Firing:
+
+{{ template "telegram.alert-firing.list" .Alerts.Firing }}
+{{ end }}
+
+{{ if gt (len .Alerts.Resolved) 0 }}
+Alerts Resolved:
+
+{{ template "telegram.alert-resolved.list" .Alerts.Resolved }}
+{{ end }}
+{{ end }}
