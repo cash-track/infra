@@ -3,13 +3,22 @@ groups:
     rules:
 
       - alert: VolumeFreeDiskSpace
-        expr: (100 - ((node_filesystem_avail_bytes{mountpoint=~".*pv/pvc.*"} * 100) / node_filesystem_size_bytes{mountpoint=~".*pv/pvc.*"})) > 90
+        expr: round(100 - ((node_filesystem_avail_bytes{device=~".*DO_Volume_pvc.*"} * 100) / node_filesystem_size_bytes{device=~".*DO_Volume_pvc.*"})) > 90
         for: 5m
         labels:
           severity: critical
         annotations:
-          summary: "Volume almost full on instance {{ $labels.instance }}"
-          description: "Instance {{ $labels.instance }} mounted volume {{ $labels.mountpoint }} almost full ({{ $value }}%)"
+          summary: "Volume almost full on {{ $labels.instance }}"
+          description: "Node {{ $labels.instance }} attached volume {{ $labels.device }} almost full ({{ $value }}%)"
+
+      - alert: NodeFreeDiskSpace
+        expr: round(100 - ((node_filesystem_avail_bytes{device=~"/dev/vda.+", mountpoint="/"} * 100) / node_filesystem_size_bytes{device=~"/dev/vda.+", mountpoint="/"})) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} disk almost full"
+          description: "Disk {{ $labels.device }} is almost full ({{ $value }}%)"
 
       - alert: ApiPodDown
         expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod=~"api.*"}) < 1
