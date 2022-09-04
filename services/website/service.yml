@@ -24,7 +24,7 @@ metadata:
   name: website
   namespace: cash-track
 spec:
-  type: ClusterIP
+  type: NodePort
   selector:
     app: website
   ports:

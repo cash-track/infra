@@ -2,23 +2,94 @@ groups:
   - name: common
     rules:
 
-      # Alert for any instance that is unreachable for >5 minutes.
-      - alert: InstanceDown
-        expr: up == 0
-        for: 5m
-        labels:
-          severity: info
-        annotations:
-          summary: "Instance {{ $labels.instance }} down"
-          description: "{{ $labels.instance }} of job {{ $labels.job }} has been down for more than 5 minutes."
-
-      # Alert for any instance that has a median request latency >1s.
       - alert: VolumeFreeDiskSpace
         expr: (100 - ((node_filesystem_avail_bytes{mountpoint=~".*pv/pvc.*"} * 100) / node_filesystem_size_bytes{mountpoint=~".*pv/pvc.*"})) > 90
         for: 5m
         labels:
-          severity: warning
-          service: storage
+          severity: critical
         annotations:
           summary: "Volume almost full on instance {{ $labels.instance }}"
           description: "Instance {{ $labels.instance }} mounted volume {{ $labels.mountpoint }} almost full ({{ $value }}%)"
+
+      - alert: ApiPodDown
+        expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod=~"api.*"}) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: API down
+          description: API service does not have enough ready pods to serve traffic for more than 5 minutes
+
+      - alert: WebsitePodDown
+        expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod=~"website.*"}) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Website down
+          description: Website service does not have enough ready pods to serve traffic for more than 5 minutes
+
+      - alert: FrontendPodDown
+        expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod=~"frontend.*"}) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Frontend down
+          description: Frontend service does not have enough ready pods to serve traffic for more than 5 minutes
+
+      - alert: DatabasePodDown
+        expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod="mysql-0"}) < 1
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: Database down
+          description: Database stateful set pod is not in ready state for more than 5 minutes
+
+      - alert: DatabaseBackupPodDown
+        expr: sum(kube_pod_status_ready{namespace="cash-track", condition="true", pod=~"mysql-backup-.*"}) < 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: Database down
+          description: Database stateful set pod is not in ready state for more than 5 minutes
+
+      - alert: PodScheduleFailed
+        expr: sum(kube_pod_status_phase{namespace=~"telegram-bots|monitoring|ingress-nginx|cash-track", phase="Pending"}) > 1
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Pod {{ $labels.pod }} schedule failed"
+          description: "Pod {{ $labels.namespace }}/{{ $labels.pod }} cannot be scheduled to any node for last 30 minutes"
+
+      - alert: ContainerTooManyRestarts
+        expr: sum by (pod, container) (changes(kube_pod_container_status_restarts_total{namespace=~"telegram-bots|monitoring|ingress-nginx|cash-track"}[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Container {{ $labels.container }} too frequently restarting"
+          description: "Container {{ $labels.container }} of a pod {{ $labels.pod }} restarted more than 5 times by last 5 minutes"
+
+      - alert: NodeHighCPURequest
+        expr: (sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / sum by (node) (kube_node_status_allocatable{resource="cpu"}) * 100) > 95
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} high CPU request"
+          description: "Node {{ $labels.node }} is under CPU request more than 95% of allocatable resources"
+
+      - alert: NodeHighMemoryRequest
+        expr: (sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / sum by (node) (kube_node_status_allocatable{resource="memory"}) * 100) > 95
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.node }} high memory request"
+          description: "Node {{ $labels.node }} is under memory request more than 95% of allocatable resources"
+
+

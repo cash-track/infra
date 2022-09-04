@@ -36,8 +36,8 @@ spec:
               cpu: 50m
               memory: 200Mi
             limits:
-              cpu: 200m
-              memory: 400Mi
+              cpu: 400m
+              memory: 500Mi
           env:
             - name: BASE_URL
               valueFrom:
