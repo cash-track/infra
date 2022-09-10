@@ -325,11 +325,41 @@ jobs:
       - name: Verify service ready
         run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=prometheus --for condition=Ready --timeout=60s
 
+  grafana-build:
+    name: grafana-build
+    runs-on: [ self-hosted, Linux, x64 ]
+    env:
+      REPO: cashtrack/grafana
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKER_HUB_USER }}
+          password: ${{ secrets.DOCKER_HUB_TOKEN }}
+
+      - name: Setup BuildX
+        uses: docker/setup-buildx-action@v2
+        id: buildx
+        with:
+          install: true
+
+      - name: Build and push
+        uses: docker/build-push-action@v2
+        with:
+          context: $GITHUB_WORKSPACE/services/grafana
+          push: true
+          tags: ${{ env.REPO }}:latest
+
+
   grafana:
     name: grafana
     runs-on: [ self-hosted, Linux, x64 ]
     needs:
       - common
+      - grafana-build
     env:
       NAMESPACE: monitoring
     steps:

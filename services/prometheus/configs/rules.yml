@@ -101,4 +101,23 @@ groups:
           summary: "Node {{ $labels.node }} high memory request"
           description: "Node {{ $labels.node }} is under memory request more than 95% of allocatable resources"
 
+      - alert: HTTPServiceHighServerErrorRate
+        expr: round((sum by (service, method, path, status) (rate(nginx_ingress_controller_requests{service=~"api|website|frontend|crashers-bot",status=~"5.."}[2m])) / sum by (service, method, path, status) (rate(nginx_ingress_controller_requests{service=~"api|website|frontend|crashers-bot"}[2m]))) * 100) > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP service {{ $labels.service }} has reached {{ $value }}% of 5xx responses rate"
+          description: "Service {{ $labels.service }} responding to {{ $labels.method }} {{ $labels.path }} with HTTP status code {{ $labels.status }} for more than {{ $value }}% requests for last 5 minutes"
+
+      - alert: HTTPServiceHighClientErrorRate
+        expr: round((sum by (service, method, path, status) (rate(nginx_ingress_controller_requests{service=~"api|website|frontend|crashers-bot",status=~"4.."}[2m])) / sum by (service, method, path, status) (rate(nginx_ingress_controller_requests{service=~"api|website|frontend|crashers-bot"}[2m]))) * 100) > 80
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "HTTP service {{ $labels.service }} has reached {{ $value }}% of 4xx responses rate"
+          description: "Service {{ $labels.service }} responding to {{ $labels.method }} {{ $labels.path }} with HTTP status code {{ $labels.status }} for more than {{ $value }}% requests for last 5 minutes"
+
+
 
