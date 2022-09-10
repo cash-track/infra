@@ -349,7 +349,7 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v2
         with:
-          context: $GITHUB_WORKSPACE/services/grafana
+          context: ./services/grafana
           push: true
           tags: ${{ env.REPO }}:latest
 
