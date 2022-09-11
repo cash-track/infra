@@ -119,5 +119,13 @@ groups:
           summary: "HTTP service {{ $labels.service }} has reached {{ $value }}% of 4xx responses rate"
           description: "Service {{ $labels.service }} responding to {{ $labels.method }} {{ $labels.path }} with HTTP status code {{ $labels.status }} for more than {{ $value }}% requests for last 5 minutes"
 
+      - alert: HTTPServiceHighResponseLatency
+        expr: histogram_quantile(0.90, sum(rate(nginx_ingress_controller_request_duration_seconds_bucket{service=~"api|website|frontend|crashers-bot"}[2m])) by (service, le, method, path)) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP service {{ $labels.service }} response time is high"
+          description: "Service {{ $labels.service }} responds to {{ $labels.method }} {{ $labels.path }} with high latency for more than {{ $value }} seconds for last 2 minutes"
 
 
