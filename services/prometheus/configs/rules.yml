@@ -84,7 +84,7 @@ groups:
           description: "Container {{ $labels.container }} of a pod {{ $labels.pod }} restarted more than 5 times by last 5 minutes"
 
       - alert: NodeHighCPURequest
-        expr: (sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / sum by (node) (kube_node_status_allocatable{resource="cpu"}) * 100) > 95
+        expr: (sum by (node) (kube_pod_container_resource_requests{resource="cpu"}) / sum by (node) (kube_node_status_allocatable{resource="cpu"}) * 100) > 98
         for: 30m
         labels:
           severity: warning
@@ -93,7 +93,7 @@ groups:
           description: "Node {{ $labels.node }} is under CPU request more than 95% of allocatable resources"
 
       - alert: NodeHighMemoryRequest
-        expr: (sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / sum by (node) (kube_node_status_allocatable{resource="memory"}) * 100) > 95
+        expr: (sum by (node) (kube_pod_container_resource_requests{resource="memory"}) / sum by (node) (kube_node_status_allocatable{resource="memory"}) * 100) > 98
         for: 30m
         labels:
           severity: warning

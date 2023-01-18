@@ -24,6 +24,7 @@ spec:
           - 0
       containers:
         - name: grafana
+          imagePullPolicy: Always
           image: cashtrack/grafana:latest
           env:
             - name: GF_PATHS_DATA
