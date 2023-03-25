@@ -4,15 +4,20 @@ metadata:
   name: api-config
   namespace: cash-track
 data:
+  APP_ENV: prod
   DEBUG: 'false'
   SAFE_MIGRATIONS: 'true'
   CACHE_STORAGE: file
+  SCHEDULER_MUTEX_CACHE_STORAGE: file
+  MONOLOG_DEFAULT_LEVEL: 'INFO'
+  QUEUE_CONNECTION: sync
+  CYCLE_SCHEMA_CACHE: 'true'
+  CYCLE_SCHEMA_WARMUP: 'true'
   JWT_TTL: '3600'
   JWT_REFRESH_TTL: '604800'
   CDN_HOST: https://storage.cash-track.app
   CDN_BUCKET: cash-track-storage
   MAIL_DRIVER: smtp
-  MAIL_ENCRYPTION: tls
   MAIL_SENDER_NAME: 'Cash Track'
   MAIL_SENDER_ADDRESS: support@cash-track.app
   CORS_ALLOWED_ORIGINS: https://cash-track.app,https://my.cash-track.app
