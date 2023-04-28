@@ -112,6 +112,7 @@ $ kubectl apply -f ./services/prometheus
 $ kubectl apply -f ./services/node-exporter
 $ kubectl apply -f ./services/grafana
 $ kubectl apply -f ./services/alertmanager
+$ kubectl apply -f ./services/redis 
 $ kubectl apply -f ./services/mysql 
 $ kubectl apply -f ./services/mysql-backup 
 $ kubectl apply -f ./services/mysql-exporter 
@@ -190,10 +191,21 @@ $ kubectl exec deployment/mysql-backup -it -- php app.php restore <id>
 $ kubectl exec deployment/mysql-backup -it -- php app.php clear --days=7
 ```
 
+#### Redis
+
+```shell
+$ kubectl set image statefulset/redis redis=cashtrack/redis:1.0.1           # Deploy new tag of Redis
+$ kubectl rollout status statefulset/redis                                  # Watch deployment status
+$ kubectl rollout undo statefulset/redis                                    # Rollback current deployment
+$ kubectl rollout history statefulset/redis                                 # List past deployment revision
+$ kubectl rollout restart statefulset/redis                                 # Redeploy currently deployed tag
+```
+
 ## Troubleshooting
 
 ```shell
 $ kubectl port-forward service/mysql 33060:3306               # Connect to MySQL from local
+$ kubectl port-forward service/redis 63790:6379               # Connect to Redis from local
 $ kubectl exec pods/mysql-0 -it -- bash                       # SSH into a Pod
 $ kubectl exec pods/mysql-0 --container backup -it -- bash    # SSH into a specific container of a Pod
 ```
