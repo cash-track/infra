@@ -2,6 +2,11 @@ name: deploy
 
 on:
   workflow_dispatch:
+    inputs:
+      mysqlTag:
+        description: 'MySQL image tag (default last)'
+        type: string
+        required: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -63,9 +68,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.mysqlTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
