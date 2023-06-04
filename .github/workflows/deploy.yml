@@ -3,8 +3,28 @@ name: deploy
 on:
   workflow_dispatch:
     inputs:
+      apiTag:
+        description: 'API image tag (default last)'
+        type: string
+        required: false
+      websiteTag:
+        description: 'Website image tag (default last)'
+        type: string
+        required: false
+      frontendTag:
+        description: 'Frontend image tag (default last)'
+        type: string
+        required: false
       mysqlTag:
         description: 'MySQL image tag (default last)'
+        type: string
+        required: false
+      mysqlBackupTag:
+        description: 'MySQL backup image tag (default last)'
+        type: string
+        required: false
+      redisTag:
+        description: 'Redis image tag (default last)'
         type: string
         required: false
 
@@ -119,9 +139,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.redisTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
@@ -164,9 +191,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.apiTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
@@ -208,9 +242,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.websiteTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
@@ -252,9 +293,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.frontendTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
@@ -296,9 +344,16 @@ jobs:
       - name: Configure kubectl
         run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
 
-      - name: Fetch current release
-        id: release
+      - name: Fetch latest release tag
+        id: latest
         run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.mysqlBackupTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
