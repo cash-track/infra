@@ -3,8 +3,8 @@ name: deploy-mysql
 on:
   workflow_dispatch:
     inputs:
-      mysqlTag:
-        description: 'MySQL tag'
+      tag:
+        description: 'Image tag (default last)'
         type: string
         required: false
 
@@ -49,9 +49,9 @@ jobs:
       - name: Set image tag
         id: release
         env:
-          INPUT_TAG: ${{ inputs.mysqlTag }}
+          INPUT_TAG: ${{ inputs.tag }}
           LATEST_TAG: ${{ steps.latest.outputs.tag }}
-        run: echo "tag=$([ -z $INPUT_TAG ] && $LATEST_TAG || $INPUT_TAG)" >> $GITHUB_OUTPUT
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
