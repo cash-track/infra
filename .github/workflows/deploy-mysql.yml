@@ -1,0 +1,69 @@
+name: deploy-mysql
+
+on:
+  workflow_dispatch:
+    inputs:
+      mysqlTag:
+        description: 'MySQL tag'
+        type: string
+        required: false
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CLUSTER: k8s-cash-track
+  NAMESPACE: cash-track
+  KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.24.4/bin/linux/amd64/kubectl
+
+jobs:
+  mysql:
+    name: mysql
+    runs-on: [self-hosted, Linux, x64]
+    env:
+      REPO: cashtrack/mysql
+      GIT_REPO: https://github.com/cash-track/mysql
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch latest release tag
+        id: latest
+        run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.mysqlTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: |
+          [  -z "$INPUT_TAG" ] && echo "$LATEST_TAG" || echo "$INPUT_TAG" >> $GITHUB_OUTPUT
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/mysql/statefulset.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/mysql/
+
+      - name: Deploy service
+        run: kubectl -n ${{ env.NAMESPACE }} delete pod mysql-0
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql --for condition=Ready --timeout=60s
