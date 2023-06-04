@@ -51,8 +51,7 @@ jobs:
         env:
           INPUT_TAG: ${{ inputs.mysqlTag }}
           LATEST_TAG: ${{ steps.latest.outputs.tag }}
-        run: |
-          [  -z "$INPUT_TAG" ] && echo "$LATEST_TAG" || echo "$INPUT_TAG" >> $GITHUB_OUTPUT
+        run: echo "tag=$([ -z $INPUT_TAG ] && $LATEST_TAG || $INPUT_TAG)" >> $GITHUB_OUTPUT
 
       - name: Update deployment
         env:
