@@ -52,6 +52,9 @@ $ kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/la
 
 ```shell
 $ helm repo add actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+$ # or
+$ helm repo update actions-runner-controller https://actions-runner-controller.github.io/actions-runner-controller
+$ # then
 $ helm upgrade --install --namespace actions-runner-system --create-namespace \
              --wait actions-runner-controller actions-runner-controller/actions-runner-controller \
              --set "githubWebhookServer.enabled=true"
