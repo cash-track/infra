@@ -21,9 +21,6 @@ jobs:
   api:
     name: api
     runs-on: [self-hosted, Linux, x64]
-    needs:
-      - mysql
-      - redis
     env:
       REPO: cashtrack/api
       GIT_REPO: https://github.com/cash-track/api
