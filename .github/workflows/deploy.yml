@@ -1,11 +1,11 @@
 name: deploy
 
 on:
-  push:
-    branches:
-      - main
-  release:
-    types: [ published ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CLUSTER: k8s-cash-track
