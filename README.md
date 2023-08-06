@@ -213,3 +213,9 @@ $ kubectl exec pods/mysql-0 -it -- bash                       # SSH into a Pod
 $ kubectl exec pods/mysql-0 --container backup -it -- bash    # SSH into a specific container of a Pod
 ```
 
+### Pod stuck in `Terminating` state
+
+```shell
+$ kubectl delete pods <pod> --grace-period=0 --force            # First try to force remove <pod>
+$ kubectl patch pod <pod> -p '{"metadata":{"finalizers":null}}' # If first attempt didn't work, try this one
+```
