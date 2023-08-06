@@ -69,4 +69,9 @@ spec:
                 secretKeyRef:
                   key: CAPTCHA_SECRET_KEY
                   name: common-secret
+            - name: GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: GOOGLE_API_CLIENT_ID
+                  name: common-secret
 
