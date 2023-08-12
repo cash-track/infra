@@ -30,7 +30,7 @@ DigitalOcean managed cluster is used.
 ### Nginx Ingress
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.3.0/deploy/static/provider/do/deploy.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/do/deploy.yaml
 ```
 
 
@@ -68,6 +68,25 @@ $ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runn
 
 Add GitHub personal access token to `common/actions-runner/github-runner-secret.yml`. Make sure you added all required permissions (see https://github.com/actions-runner-controller/actions-runner-controller#deploying-using-pat-authentication).
 
+#### Upgrade
+
+See https://github.com/actions/actions-runner-controller/blob/master/charts/actions-runner-controller/docs/UPGRADING.md
+
+```shell
+$ # REMEMBER TO UPDATE THE CHART_VERSION TO RELEVANT CHART VERSION!!!!
+$ CHART_VERSION=0.23.3
+$ 
+$ curl -L https://github.com/actions/actions-runner-controller/releases/download/actions-runner-controller-0.23.3/actions-runner-controller-0.23.3.tgz | tar zxv --strip 1 actions-runner-controller/crds
+$ 
+$ kubectl replace -f crds/
+$ 
+$ # helm upgrade [RELEASE] [CHART] [flags]
+$ helm upgrade actions-runner-controller \
+  actions-runner-controller/actions-runner-controller \
+  --install \
+  --namespace actions-runner-system \
+  --version ${CHART_VERSION}
+ ```
 
 ## Production
 
