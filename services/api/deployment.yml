@@ -81,10 +81,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 100Mi
+              memory: 800Mi
             limits:
               cpu: 200m
-              memory: 400Mi
+              memory: 1Gi
           envFrom:
             - secretRef:
                 name: common-secret
