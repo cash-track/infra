@@ -78,6 +78,9 @@ spec:
               port: 8080
               path: /healthcheck
           readinessProbe:
+            # to give workers enough time to initialise
+            # needs to be increased once workers number increased
+            initialDelaySeconds: 30
             tcpSocket:
               port: 8080
           resources:
@@ -95,8 +98,6 @@ spec:
             - secretRef:
                 name: api-secret
           env:
-            - name: RR_HTTP_NUM_WORKERS
-              value: "10"
             - name: APP_URL
               valueFrom:
                 configMapKeyRef:
@@ -129,3 +130,8 @@ spec:
                 secretKeyRef:
                   key: MYSQL_PASSWORD
                   name: mysql-secret
+            - name: RR_HTTP_NUM_WORKERS
+              valueFrom:
+                configMapKeyRef:
+                  name: api-config
+                  key: RR_HTTP_NUM_WORKERS
