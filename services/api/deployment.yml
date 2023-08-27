@@ -31,6 +31,8 @@ spec:
             - secretRef:
                 name: api-secret
           env:
+            - name: RR_HTTP_NUM_WORKERS
+              value: "1"
             - name: APP_URL
               valueFrom:
                 configMapKeyRef:
@@ -81,10 +83,10 @@ spec:
           resources:
             requests:
               cpu: 50m
-              memory: 100Mi
+              memory: 800Mi
             limits:
               cpu: 200m
-              memory: 400Mi
+              memory: 1Gi
           envFrom:
             - secretRef:
                 name: common-secret
@@ -93,6 +95,8 @@ spec:
             - secretRef:
                 name: api-secret
           env:
+            - name: RR_HTTP_NUM_WORKERS
+              value: "10"
             - name: APP_URL
               valueFrom:
                 configMapKeyRef:
