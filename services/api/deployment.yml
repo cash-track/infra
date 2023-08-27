@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       initContainers:
         - name: migration
-          image: cashtrack/api:latest
+          image: cashtrack/api:1.2.10
           command: ["php", "app.php", "migrate", "-s"]
           envFrom:
             - secretRef:
@@ -67,7 +67,7 @@ spec:
                   name: mysql-secret
       containers:
         - name: api
-          image: cashtrack/api:latest
+          image: cashtrack/api:1.2.10
           ports:
             - containerPort: 8080
               name: http
@@ -80,16 +80,16 @@ spec:
           readinessProbe:
             # to give workers enough time to initialise
             # needs to be increased once workers number increased
-            initialDelaySeconds: 60
+            initialDelaySeconds: 30
             tcpSocket:
               port: 8080
           resources:
             requests:
-              cpu: 50m
-              memory: 800Mi
-            limits:
               cpu: 200m
-              memory: 1Gi
+              memory: 500Mi
+            limits:
+              cpu: 400m
+              memory: 700Mi
           envFrom:
             - secretRef:
                 name: common-secret
