@@ -21,7 +21,7 @@ spec:
       automountServiceAccountToken: false
       initContainers:
         - name: migration
-          image: cashtrack/api:1.2.10
+          image: cashtrack/api:latest
           command: ["php", "app.php", "migrate", "-s"]
           envFrom:
             - secretRef:
@@ -67,7 +67,7 @@ spec:
                   name: mysql-secret
       containers:
         - name: api
-          image: cashtrack/api:1.2.10
+          image: cashtrack/api:latest
           ports:
             - containerPort: 8080
               name: http
