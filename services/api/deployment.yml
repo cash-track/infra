@@ -31,6 +31,8 @@ spec:
             - secretRef:
                 name: api-secret
           env:
+            - name: RR_HTTP_NUM_WORKERS
+              value: "1"
             - name: APP_URL
               valueFrom:
                 configMapKeyRef:
@@ -93,6 +95,8 @@ spec:
             - secretRef:
                 name: api-secret
           env:
+            - name: RR_HTTP_NUM_WORKERS
+              value: "10"
             - name: APP_URL
               valueFrom:
                 configMapKeyRef:
