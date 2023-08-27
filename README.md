@@ -152,7 +152,7 @@ To follow deployment process for every new version once initial setup is done us
 #### API
 
 ```shell
-$ kubectl set image deployment/api api=cashtrack/api:1.1.4    # Deploy new tag
+$ kubectl set image deployment/api api=cashtrack/api:1.2.9    # Deploy new tag
 $ kubectl rollout status deployment/api                       # Watch deployment status
 $ kubectl rollout undo deployment/api                         # Rollback current deployment
 $ kubectl rollout history deployment/api                      # List past deployment revision
