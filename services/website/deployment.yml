@@ -7,7 +7,7 @@ spec:
   selector:
     matchLabels:
       app: website
-  replicas: 1
+  replicas: 2
   strategy:
     type: RollingUpdate
   revisionHistoryLimit: 3
