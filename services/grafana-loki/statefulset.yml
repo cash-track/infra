@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana-loki
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: grafana-loki
+  serviceName: grafana-loki
+  replicas: 1
+  revisionHistoryLimit: 3
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: grafana-loki
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        supplementalGroups:
+          - 0
+      containers:
+        - name: grafana-loki
+          imagePullPolicy: Always
+          image: grafana/loki:2.9.0
+          args:
+            - -print-config-stderr
+            - -config.file=/etc/loki/config.yaml
+          ports:
+            - containerPort: 3100
+              name: http
+          volumeMounts:
+            - mountPath: /loki
+              name: grafana-loki-data
+            - mountPath: /etc/loki
+              name: grafana-loki-configs
+          resources:
+            requests:
+              cpu: 100m
+              memory: 300Mi
+            limits:
+              cpu: 300m
+              memory: 600Mi
+          livenessProbe:
+            tcpSocket:
+              port: 3100
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3100
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
+      volumes:
+        - name: grafana-loki-configs
+          configMap:
+            name: grafana-loki-configs
+  volumeClaimTemplates:
+    - metadata:
+        name: grafana-loki-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 30Gi

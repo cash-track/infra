@@ -21,10 +21,9 @@
             }
         ]
     },
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
-    "id": 3,
     "links": [
         {
             "icon": "info",
@@ -109,7 +108,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -181,7 +180,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -261,7 +260,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -295,7 +294,7 @@
                 "content": "<span style=\"font-family: 'Open Sans', 'Helvetica Neue', Helvetica; font-size: 25px;vertical-align: text-top;color: #bbbfc2;margin-left: 10px;\">Prometheus</span>\n\n<p style=\"margin-top: 10px;\">You're using Prometheus, an open-source systems monitoring and alerting toolkit originally built at SoundCloud. For more information, check out the <a href=\"https://grafana.com/\">Grafana</a> and <a href=\"http://prometheus.io/\">Prometheus</a> projects.</p>",
                 "mode": "html"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "style": {},
             "targets": [
                 {
@@ -456,7 +455,7 @@
                 "content": "#### Samples Ingested\nThis graph displays the count of samples ingested by the Prometheus server, as measured over the last 5 minutes, per time series in the range vector. When troubleshooting an issue on IRC or GitHub, this is often the first stat requested by the Prometheus team. ",
                 "mode": "markdown"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "style": {},
             "targets": [
                 {
@@ -712,7 +711,7 @@
                 "content": "#### Scrapes\nPrometheus scrapes metrics from instrumented jobs, either directly or via an intermediary push gateway for short-lived jobs. Target scrapes will show how frequently targets are scraped, as measured over the last 5 minutes, per time series in the range vector. Scrape Duration will show how long the scrapes are taking, with percentiles available as series. ",
                 "mode": "markdown"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "style": {},
             "targets": [
                 {
@@ -841,7 +840,7 @@
                 "content": "#### Rule Evaluation Duration\nThis graph panel plots the duration for all evaluations to execute. The 50th percentile, 90th percentile and 99th percentile are shown as three separate series to help identify outliers that may be skewing the data.",
                 "mode": "markdown"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "style": {},
             "targets": [
                 {
@@ -869,8 +868,8 @@
             {
                 "current": {
                     "selected": false,
-                    "text": "localhost:9090",
-                    "value": "localhost:9090"
+                    "text": "10.244.2.213:9090",
+                    "value": "10.244.2.213:9090"
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -931,6 +930,6 @@
     "timezone": "browser",
     "title": "Prometheus Stats",
     "uid": "rpfmFFz7z",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }

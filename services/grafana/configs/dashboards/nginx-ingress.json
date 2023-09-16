@@ -39,7 +39,7 @@
             }
         ]
     },
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
     "links": [],
@@ -1653,8 +1653,7 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green",
-                                "value": null
+                                "color": "green"
                             },
                             {
                                 "color": "red",
@@ -2056,7 +2055,7 @@
             {
                 "allValue": ".*",
                 "current": {
-                    "selected": true,
+                    "selected": false,
                     "text": "All",
                     "value": "$__all"
                 },
@@ -2118,6 +2117,6 @@
     "timezone": "browser",
     "title": "NGINX Ingress controller",
     "uid": "nginx",
-    "version": 4,
+    "version": 5,
     "weekStart": ""
 }
