@@ -125,6 +125,8 @@ $ echo -n 'admin' | base64
 $ kubectl create -n monitoring configmap prometheus-configs --from-file=./services/prometheus/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap alertmanager-configs --from-file=./services/alertmanager/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap grafana-configs --from-file=./services/grafana/configs -o yaml --dry-run=client | kubectl apply -f -
+$ kubectl create -n monitoring configmap grafana-loki-configs --from-file=./services/grafana-loki/configs -o yaml --dry-run=client | kubectl apply -f -
+$ kubectl create -n monitoring configmap promtail-configs --from-file=./services/promtail/configs -o yaml --dry-run=client | kubectl apply -f -
 ```
 
 ```shell
@@ -133,6 +135,8 @@ $ kubectl apply -R -f ./common
 $ kubectl apply -f ./services/prometheus
 $ kubectl apply -f ./services/node-exporter
 $ kubectl apply -f ./services/grafana
+$ kubectl apply -f ./services/grafana-loki
+$ kubectl apply -f ./services/promtail
 $ kubectl apply -f ./services/alertmanager
 $ kubectl apply -f ./services/redis 
 $ kubectl apply -f ./services/mysql 

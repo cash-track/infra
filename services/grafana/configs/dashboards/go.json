@@ -22,11 +22,10 @@
         ]
     },
     "description": "Process status published by Go Prometheus client library, e.g. memory used, fds open, GC details",
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "gnetId": 6671,
     "graphTooltip": 0,
-    "id": 10,
     "links": [],
     "liveNow": false,
     "panels": [
@@ -72,7 +71,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -185,7 +184,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -298,7 +297,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -438,7 +437,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -578,7 +577,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -673,7 +672,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -768,7 +767,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -863,7 +862,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1066,6 +1065,6 @@
     "timezone": "browser",
     "title": "Go Processes",
     "uid": "ypFZFgvmz",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }

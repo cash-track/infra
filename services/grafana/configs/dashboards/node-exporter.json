@@ -22,11 +22,10 @@
             }
         ]
     },
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "gnetId": 1860,
     "graphTooltip": 0,
-    "id": 6,
     "links": [
         {
             "icon": "external link",
@@ -136,7 +135,7 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -219,7 +218,7 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -302,7 +301,7 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -376,17 +375,19 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "expr": "((node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"} - node_memory_MemFree_bytes{instance=\"$node\",job=\"$job\"}) / (node_memory_MemTotal_bytes{instance=\"$node\",job=\"$job\"} )) * 100",
                     "format": "time_series",
                     "hide": true,
                     "intervalFactor": 1,
+                    "range": true,
                     "refId": "A",
                     "step": 240
                 },
@@ -471,7 +472,7 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -552,7 +553,7 @@
                 "showThresholdLabels": false,
                 "showThresholdMarkers": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -631,7 +632,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -713,7 +714,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -796,7 +797,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -877,7 +878,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -956,7 +957,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -1061,7 +1062,7 @@
                 "alertThreshold": true
             },
             "percentage": true,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1269,7 +1270,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1467,7 +1468,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -14648,7 +14649,7 @@
             },
             {
                 "current": {
-                    "selected": false,
+                    "selected": true,
                     "text": "node-exporter",
                     "value": "node-exporter"
                 },
@@ -14678,9 +14679,9 @@
             },
             {
                 "current": {
-                    "selected": false,
-                    "text": "10.244.0.201:9100",
-                    "value": "10.244.0.201:9100"
+                    "selected": true,
+                    "text": "10.244.1.120:9100",
+                    "value": "10.244.1.120:9100"
                 },
                 "datasource": {
                     "type": "prometheus",
@@ -14761,6 +14762,6 @@
     "timezone": "browser",
     "title": "Node Exporter Full",
     "uid": "rYdddlPWk",
-    "version": 4,
+    "version": 5,
     "weekStart": ""
 }

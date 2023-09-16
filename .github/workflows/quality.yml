@@ -12,7 +12,7 @@ concurrency:
 
 env:
   CLUSTER: k8s-cash-track
-  KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.24.4/bin/linux/amd64/kubectl
+  KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.27.4/bin/linux/amd64/kubectl
 
 jobs:
   common:
@@ -42,6 +42,8 @@ jobs:
           kubectl apply --dry-run=server -f services/prometheus/
           kubectl apply --dry-run=server -f services/node-exporter/
           kubectl apply --dry-run=server -f services/grafana/
+          kubectl apply --dry-run=server -f services/grafana-loki/
+          kubectl apply --dry-run=server -f services/promtail/
           kubectl apply --dry-run=server -f services/mysql-exporter/
           kubectl apply --dry-run=server -f services/alertmanager/
   api:
