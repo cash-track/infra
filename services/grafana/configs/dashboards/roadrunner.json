@@ -21,7 +21,7 @@
             }
         ]
     },
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
     "links": [
@@ -85,7 +85,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -94,7 +94,7 @@
                     },
                     "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_uptime_seconds",
+                    "expr": "max(rr_http_uptime_seconds)",
                     "instant": true,
                     "interval": "",
                     "legendFormat": "Uptime",
@@ -122,7 +122,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 4,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -131,11 +131,11 @@
                         },
                         "lineInterpolation": "linear",
                         "lineWidth": 1,
-                        "pointSize": 5,
+                        "pointSize": 1,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -202,9 +202,9 @@
                     },
                     "editorMode": "code",
                     "exemplar": true,
-                    "expr": "go_memstats_heap_inuse_bytes{job=~\"$job\"}",
+                    "expr": "go_memstats_heap_inuse_bytes{job=~\"$job\", pod=~\"$pod\"}",
                     "interval": "",
-                    "legendFormat": "{{job}} ({{instance}})",
+                    "legendFormat": "{{pod}}",
                     "range": true,
                     "refId": "A"
                 }
@@ -229,7 +229,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 11,
+                        "fillOpacity": 10,
                         "gradientMode": "hue",
                         "hideFrom": {
                             "legend": false,
@@ -241,11 +241,11 @@
                             "fill": "solid"
                         },
                         "lineWidth": 1,
-                        "pointSize": 5,
+                        "pointSize": 1,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -315,10 +315,10 @@
                     },
                     "editorMode": "code",
                     "exemplar": true,
-                    "expr": "go_goroutines{job=~\"$job\"}",
+                    "expr": "go_goroutines{job=~\"$job\", pod=~\"$pod\"}",
                     "instant": false,
                     "interval": "",
-                    "legendFormat": "{{job}} ({{instance}})",
+                    "legendFormat": "{{pod}}",
                     "refId": "A"
                 }
             ],
@@ -424,7 +424,7 @@
                 },
                 "showUnfilled": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -433,7 +433,7 @@
                     },
                     "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_total_workers",
+                    "expr": "sum(rr_http_total_workers)",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -445,8 +445,9 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_workers_ready",
+                    "expr": "sum(rr_http_workers_ready)",
                     "instant": true,
                     "interval": "",
                     "legendFormat": "READY",
@@ -459,7 +460,7 @@
                     },
                     "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_workers_working",
+                    "expr": "sum(rr_http_workers_working)",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -473,7 +474,7 @@
                     },
                     "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_workers_invalid",
+                    "expr": "sum(rr_http_workers_invalid)",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -501,7 +502,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 5,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -509,12 +510,12 @@
                             "viz": false
                         },
                         "lineInterpolation": "smooth",
-                        "lineWidth": 2,
-                        "pointSize": 5,
+                        "lineWidth": 1,
+                        "pointSize": 1,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -583,11 +584,12 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": true,
-                    "expr": "(rr_http_workers_memory_bytes/1024000)",
+                    "expr": "(rr_http_workers_memory_bytes{pod=~\"$pod\"}/1024000)",
                     "instant": false,
                     "interval": "",
-                    "legendFormat": "Workers total memory used",
+                    "legendFormat": "{{pod}}",
                     "refId": "A"
                 }
             ],
@@ -599,6 +601,7 @@
                 "type": "prometheus",
                 "uid": "bVPDr6mVk"
             },
+            "description": "",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -637,20 +640,22 @@
                     "fields": "",
                     "values": false
                 },
-                "showUnfilled": true
+                "showUnfilled": true,
+                "text": {}
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_http_worker_memory_bytes",
+                    "expr": "rr_http_worker_memory_bytes{pod=~\"$pod\"}",
                     "instant": true,
                     "interval": "",
-                    "legendFormat": "PID: {{pid}}",
+                    "legendFormat": "{{pod}}: {{pid}}",
                     "refId": "A"
                 }
             ],
@@ -662,6 +667,7 @@
                 "type": "prometheus",
                 "uid": "bVPDr6mVk"
             },
+            "description": "The 95th percentile of HTTP latency per pod",
             "fieldConfig": {
                 "defaults": {
                     "color": {
@@ -674,20 +680,20 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 7,
+                        "fillOpacity": 10,
                         "gradientMode": "hue",
                         "hideFrom": {
                             "legend": false,
                             "tooltip": false,
                             "viz": false
                         },
-                        "lineInterpolation": "smooth",
+                        "lineInterpolation": "linear",
                         "lineWidth": 1,
                         "pointSize": 5,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -713,35 +719,10 @@
                     },
                     "unit": "s"
                 },
-                "overrides": [
-                    {
-                        "__systemRef": "hideSeriesFrom",
-                        "matcher": {
-                            "id": "byNames",
-                            "options": {
-                                "mode": "exclude",
-                                "names": [
-                                    "histogram_quantile(0.95, sum(rate(rr_http_request_duration_seconds_bucket[5m])) by (le))"
-                                ],
-                                "prefix": "All except:",
-                                "readOnly": true
-                            }
-                        },
-                        "properties": [
-                            {
-                                "id": "custom.hideFrom",
-                                "value": {
-                                    "legend": false,
-                                    "tooltip": false,
-                                    "viz": true
-                                }
-                            }
-                        ]
-                    }
-                ]
+                "overrides": []
             },
             "gridPos": {
-                "h": 8,
+                "h": 11,
                 "w": 24,
                 "x": 0,
                 "y": 30
@@ -767,9 +748,9 @@
                     },
                     "editorMode": "code",
                     "exemplar": true,
-                    "expr": "histogram_quantile(0.95, sum(rate(rr_http_request_duration_seconds_bucket[5m])) by (le))",
+                    "expr": "histogram_quantile(0.95, sum(rate(rr_http_request_duration_seconds_bucket{pod=~\"$pod\"}[5m])) by (pod, le))",
                     "interval": "",
-                    "legendFormat": "",
+                    "legendFormat": "{{pod}}",
                     "range": true,
                     "refId": "A"
                 }
@@ -794,7 +775,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 6,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -802,12 +783,12 @@
                             "viz": false
                         },
                         "lineInterpolation": "smooth",
-                        "lineWidth": 2,
+                        "lineWidth": 1,
                         "pointSize": 5,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -822,7 +803,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -837,7 +819,7 @@
                 "h": 9,
                 "w": 12,
                 "x": 0,
-                "y": 38
+                "y": 41
             },
             "id": 8,
             "options": {
@@ -860,9 +842,9 @@
                     },
                     "editorMode": "code",
                     "exemplar": true,
-                    "expr": "rr_http_requests_queue",
+                    "expr": "rr_http_requests_queue{pod=~\"$pod\"}",
                     "interval": "",
-                    "legendFormat": "",
+                    "legendFormat": "{{pod}}",
                     "range": true,
                     "refId": "A"
                 }
@@ -887,7 +869,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 5,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -900,7 +882,7 @@
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -915,7 +897,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -930,7 +913,7 @@
                 "h": 9,
                 "w": 12,
                 "x": 12,
-                "y": 38
+                "y": 41
             },
             "id": 18,
             "options": {
@@ -953,7 +936,7 @@
                     },
                     "editorMode": "code",
                     "exemplar": true,
-                    "expr": "rate(rr_http_request_total[1m])",
+                    "expr": "sum(rate(rr_http_request_total{pod=~\"$pod\"}[1m])) by (status)",
                     "interval": "",
                     "legendFormat": "HTTP {{ status }}",
                     "range": true,
@@ -989,7 +972,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "blue"
+                                "color": "blue",
+                                "value": null
                             }
                         ]
                     }
@@ -1044,7 +1028,7 @@
                 "h": 8,
                 "w": 13,
                 "x": 0,
-                "y": 47
+                "y": 50
             },
             "id": 23,
             "options": {
@@ -1061,15 +1045,16 @@
                 },
                 "showUnfilled": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_jobs_total_workers",
+                    "expr": "sum(rr_jobs_total_workers{pod=~\"$pod\"})",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -1081,8 +1066,9 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_jobs_workers_ready",
+                    "expr": "sum(rr_jobs_workers_ready{pod=~\"$pod\"})",
                     "instant": true,
                     "interval": "",
                     "legendFormat": "READY",
@@ -1093,8 +1079,9 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_jobs_workers_working",
+                    "expr": "sum(rr_jobs_workers_working{pod=~\"$pod\"})",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -1106,8 +1093,9 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_jobs_workers_invalid",
+                    "expr": "sum(rr_jobs_workers_invalid{pod=~\"$pod\"})",
                     "hide": false,
                     "instant": true,
                     "interval": "",
@@ -1135,7 +1123,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 5,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -1143,12 +1131,12 @@
                             "viz": false
                         },
                         "lineInterpolation": "smooth",
-                        "lineWidth": 2,
+                        "lineWidth": 1,
                         "pointSize": 5,
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -1163,7 +1151,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -1195,7 +1184,7 @@
                 "h": 8,
                 "w": 11,
                 "x": 13,
-                "y": 47
+                "y": 50
             },
             "id": 27,
             "options": {
@@ -1216,11 +1205,12 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": true,
-                    "expr": "(rr_jobs_workers_memory_bytes/1024000)",
+                    "expr": "(rr_jobs_workers_memory_bytes{pod=~\"$pod\"}/1024000)",
                     "instant": false,
                     "interval": "",
-                    "legendFormat": "Workers total memory used",
+                    "legendFormat": "{{ pod }}",
                     "refId": "A"
                 }
             ],
@@ -1242,7 +1232,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "semi-dark-blue"
+                                "color": "semi-dark-blue",
+                                "value": null
                             }
                         ]
                     },
@@ -1254,7 +1245,7 @@
                 "h": 12,
                 "w": 24,
                 "x": 0,
-                "y": 55
+                "y": 58
             },
             "id": 24,
             "options": {
@@ -1271,18 +1262,19 @@
                 },
                 "showUnfilled": true
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": false,
-                    "expr": "rr_jobs_worker_memory_bytes",
+                    "expr": "rr_jobs_worker_memory_bytes{pod=~\"$pod\"}",
                     "instant": true,
                     "interval": "",
-                    "legendFormat": "PID: {{pid}}",
+                    "legendFormat": "{{pod}}: {{pid}}",
                     "refId": "A"
                 }
             ],
@@ -1306,7 +1298,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 0,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -1319,7 +1311,7 @@
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": false,
                         "stacking": {
                             "group": "A",
@@ -1334,7 +1326,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             },
                             {
                                 "color": "red",
@@ -1349,7 +1342,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 0,
-                "y": 67
+                "y": 70
             },
             "id": 22,
             "options": {
@@ -1370,10 +1363,12 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": true,
-                    "expr": "rate(rr_jobs_jobs_ok[5m])",
+                    "expr": "rate(rr_jobs_jobs_ok{pod=~\"$pod\"}[5m])",
                     "interval": "",
-                    "legendFormat": "",
+                    "legendFormat": "{{pod}}",
+                    "range": true,
                     "refId": "A"
                 }
             ],
@@ -1397,7 +1392,7 @@
                         "axisPlacement": "auto",
                         "barAlignment": 0,
                         "drawStyle": "line",
-                        "fillOpacity": 9,
+                        "fillOpacity": 10,
                         "gradientMode": "none",
                         "hideFrom": {
                             "legend": false,
@@ -1410,7 +1405,7 @@
                         "scaleDistribution": {
                             "type": "linear"
                         },
-                        "showPoints": "auto",
+                        "showPoints": "never",
                         "spanNulls": 3600000,
                         "stacking": {
                             "group": "A",
@@ -1425,7 +1420,8 @@
                         "mode": "absolute",
                         "steps": [
                             {
-                                "color": "green"
+                                "color": "green",
+                                "value": null
                             }
                         ]
                     }
@@ -1452,7 +1448,7 @@
                 "h": 8,
                 "w": 12,
                 "x": 12,
-                "y": 67
+                "y": 70
             },
             "id": 26,
             "options": {
@@ -1473,10 +1469,12 @@
                         "type": "prometheus",
                         "uid": "bVPDr6mVk"
                     },
+                    "editorMode": "code",
                     "exemplar": true,
-                    "expr": "rate(rr_jobs_jobs_err[5m])",
+                    "expr": "rate(rr_jobs_jobs_err{pod=~\"$pod\"}[5m])",
                     "interval": "",
-                    "legendFormat": "",
+                    "legendFormat": "{{pod}}",
+                    "range": true,
                     "refId": "A"
                 }
             ],
@@ -1484,7 +1482,7 @@
             "type": "timeseries"
         }
     ],
-    "refresh": "5s",
+    "refresh": "",
     "schemaVersion": 37,
     "style": "dark",
     "tags": [
@@ -1496,10 +1494,10 @@
                 "current": {
                     "selected": true,
                     "text": [
-                        "All"
+                        "road-runner"
                     ],
                     "value": [
-                        "$__all"
+                        "road-runner"
                     ]
                 },
                 "datasource": {
@@ -1518,6 +1516,37 @@
                     "refId": "StandardVariableQuery"
                 },
                 "refresh": 2,
+                "regex": "road-runner",
+                "skipUrlSync": false,
+                "sort": 0,
+                "type": "query"
+            },
+            {
+                "current": {
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
+                },
+                "datasource": {
+                    "type": "prometheus",
+                    "uid": "bVPDr6mVk"
+                },
+                "definition": "label_values(go_memstats_heap_inuse_bytes{job=~\"$job\"}, pod)",
+                "hide": 0,
+                "includeAll": true,
+                "label": "Pod",
+                "multi": true,
+                "name": "pod",
+                "options": [],
+                "query": {
+                    "query": "label_values(go_memstats_heap_inuse_bytes{job=~\"$job\"}, pod)",
+                    "refId": "StandardVariableQuery"
+                },
+                "refresh": 2,
                 "regex": "",
                 "skipUrlSync": false,
                 "sort": 0,
@@ -1526,7 +1555,7 @@
         ]
     },
     "time": {
-        "from": "now-30m",
+        "from": "now-1h",
         "to": "now"
     },
     "timepicker": {},

@@ -22,11 +22,10 @@
         ]
     },
     "description": "",
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "gnetId": 11323,
     "graphTooltip": 1,
-    "id": 8,
     "links": [],
     "liveNow": false,
     "panels": [
@@ -55,6 +54,7 @@
         },
         {
             "datasource": {
+                "type": "prometheus",
                 "uid": "$datasource"
             },
             "description": "**Uptime**\n\nThe amount of time since the last restart of the MySQL server process.",
@@ -112,7 +112,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "calculatedInterval": "10m",
@@ -120,6 +120,7 @@
                         "uid": "$datasource"
                     },
                     "datasourceErrors": {},
+                    "editorMode": "code",
                     "errors": {},
                     "expr": "mysql_global_status_uptime{job=~\"$job\", instance=~\"$instance\"}",
                     "format": "time_series",
@@ -127,6 +128,7 @@
                     "intervalFactor": 1,
                     "legendFormat": "{{instance}}",
                     "metric": "",
+                    "range": true,
                     "refId": "A",
                     "step": 300
                 }
@@ -199,7 +201,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "calculatedInterval": "10m",
@@ -286,7 +288,7 @@
                 },
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "calculatedInterval": "10m",
@@ -389,7 +391,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -540,7 +542,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -729,7 +731,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -844,7 +846,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1015,7 +1017,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1156,7 +1158,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1355,7 +1357,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -1512,7 +1514,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "pointradius": 5,
             "points": false,
             "renderer": "flot",
@@ -3916,9 +3918,13 @@
             {
                 "allValue": ".+",
                 "current": {
-                    "selected": false,
-                    "text": "All",
-                    "value": "$__all"
+                    "selected": true,
+                    "text": [
+                        "All"
+                    ],
+                    "value": [
+                        "$__all"
+                    ]
                 },
                 "datasource": {
                     "uid": "$datasource"
@@ -3980,7 +3986,7 @@
         ]
     },
     "time": {
-        "from": "now-1h",
+        "from": "now-24h",
         "to": "now"
     },
     "timepicker": {
@@ -4017,6 +4023,6 @@
     "timezone": "",
     "title": "MySQL",
     "uid": "549c2bf8936f7767ea6ac47c47b00f2a",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }

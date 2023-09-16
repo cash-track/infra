@@ -22,10 +22,9 @@
         ]
     },
     "description": "Metrics about Grafana",
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "graphTooltip": 0,
-    "id": 1,
     "links": [
         {
             "icon": "external link",
@@ -120,7 +119,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -200,7 +199,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -280,7 +279,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -360,7 +359,7 @@
                 "text": {},
                 "textMode": "auto"
             },
-            "pluginVersion": "9.1.0",
+            "pluginVersion": "9.1.4",
             "targets": [
                 {
                     "datasource": {
@@ -1280,6 +1279,6 @@
     "timezone": "",
     "title": "Grafana metrics",
     "uid": "isFoa0z7k",
-    "version": 1,
+    "version": 2,
     "weekStart": ""
 }
