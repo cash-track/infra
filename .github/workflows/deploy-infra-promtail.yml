@@ -1,0 +1,50 @@
+name: deploy-infra-promtail
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CLUSTER: k8s-cash-track
+  NAMESPACE: cash-track
+  KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.27.4/bin/linux/amd64/kubectl
+
+jobs:
+
+  promtail:
+    name: promtail
+    runs-on: [ self-hosted, Linux, x64 ]
+    env:
+      NAMESPACE: monitoring
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Apply definition
+        run: |
+          kubectl create -n ${{ env.NAMESPACE }} configmap promtail-configs --from-file=$GITHUB_WORKSPACE/services/promtail/configs -o yaml --dry-run=client | kubectl apply -f -
+          kubectl apply -f $GITHUB_WORKSPACE/services/promtail/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/promtail
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=promtail --for condition=Ready --timeout=30s
+
