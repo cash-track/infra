@@ -30,7 +30,7 @@ scrape_configs:
     pipeline_stages:
       - docker: {}
       - match:
-          selector: '{namespace=~".+"} |~ `/explore|/healthcheck|/api/ds/query|0.22.0|monitoring|kube-probe/1.27`'
+          selector: '{namespace=~".+"} |~ "/explore|/healthcheck|/api/ds/query|0.22.0|monitoring|kube-probe/1.27"'
           action: drop
           drop_counter_reason: healthchecks
     relabel_configs:

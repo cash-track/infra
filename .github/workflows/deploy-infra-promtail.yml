@@ -41,6 +41,7 @@ jobs:
         run: |
           kubectl create -n ${{ env.NAMESPACE }} configmap promtail-configs --from-file=$GITHUB_WORKSPACE/services/promtail/configs -o yaml --dry-run=client | kubectl apply -f -
           kubectl apply -f $GITHUB_WORKSPACE/services/promtail/
+          kubectl rollout -n ${{ env.NAMESPACE }} restart daemonset/promtail
 
       - name: Verify deployment
         run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/promtail
