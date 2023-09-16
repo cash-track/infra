@@ -22,11 +22,10 @@
         ]
     },
     "description": "",
-    "editable": true,
+    "editable": false,
     "fiscalYearStartMonth": 0,
     "gnetId": 9614,
     "graphTooltip": 1,
-    "id": 15,
     "links": [],
     "liveNow": false,
     "panels": [
@@ -661,7 +660,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "8.3.4",
+            "pluginVersion": "9.1.4",
             "pointradius": 2,
             "points": false,
             "renderer": "flot",
@@ -753,7 +752,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "8.3.4",
+            "pluginVersion": "9.1.4",
             "pointradius": 2,
             "points": false,
             "renderer": "flot",
@@ -854,7 +853,7 @@
                 "alertThreshold": true
             },
             "percentage": false,
-            "pluginVersion": "8.3.4",
+            "pluginVersion": "9.1.4",
             "pointradius": 2,
             "points": false,
             "renderer": "flot",
@@ -918,7 +917,7 @@
         "list": [
             {
                 "current": {
-                    "selected": false,
+                    "selected": true,
                     "text": "Prometheus",
                     "value": "Prometheus"
                 },
@@ -929,6 +928,7 @@
                 "name": "DS_PROMETHEUS",
                 "options": [],
                 "query": "prometheus",
+                "queryValue": "",
                 "refresh": 1,
                 "regex": "",
                 "skipUrlSync": false,
@@ -937,7 +937,7 @@
             {
                 "allValue": ".*",
                 "current": {
-                    "selected": false,
+                    "selected": true,
                     "text": "All",
                     "value": "$__all"
                 },
@@ -967,7 +967,7 @@
         ]
     },
     "time": {
-        "from": "now-15m",
+        "from": "now-1h",
         "to": "now"
     },
     "timepicker": {
