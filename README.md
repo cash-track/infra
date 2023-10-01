@@ -166,6 +166,7 @@ $ kubectl rollout restart deployment/api                      # Redeploy current
 ```shell
 $ kubectl exec deployments/api -it -- php app.php cache:clean
 $ kubectl exec deployments/api -it -- php app.php migrate
+$ kubectl exec deployments/api -it -- php app.php newsletter:send Newsletter\\TelegramChannelMail --test 1
 ```
 
 #### Website
