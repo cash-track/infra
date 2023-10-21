@@ -88,6 +88,58 @@ $ helm upgrade actions-runner-controller \
   --version ${CHART_VERSION}
  ```
 
+### Kubernetes Dashboard
+
+For the dashboard it is recommended to use [Kubernetes Dashboard projecs](https://github.com/kubernetes/dashboard). See [full installation instruction](https://gist.github.com/bikram20/4f4dbbaf5fcc874d5daee2e3b780d919).
+
+#### Install
+
+```shell
+$ helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
+$ helm upgrade \
+    --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
+    --create-namespace \
+    --namespace kubernetes-dashboard \
+    --set app.ingress.enabled=false \
+    --set metrics-server.enabled=false \
+    --set cert-manager.enabled=false \
+    --set nginx.enabled=false
+```
+
+#### Usage
+
+```shell
+$ export POD_NAME=$(kubectl get pods -n kubernetes-dashboard -l "app.kubernetes.io/name=kubernetes-dashboard,app.kubernetes.io/instance=kubernetes-dashboard" -o jsonpath="{.items[0].metadata.name}")
+$ kubectl -n kubernetes-dashboard port-forward $POD_NAME 8443:8443
+```
+
+Then open https://127.0.0.1:8443/ and use kubeconfig from DigitalOcean to authenticate.
+
+#### Upgrade
+
+Go to `kubernetes-dashboard` dir on your local where chart values will be downloaded.
+
+```shell
+$ helm repo update
+$ helm search repo kubernetes-dashboard
+$ helm pull kubernetes-dashboard/kubernetes-dashboard --untar
+```
+Modify values according your needs in `kubernetes-dashboard` directory.
+
+```shell
+$ helm ls
+$ helm upgrade \
+    --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
+    --create-namespace \
+    --namespace kubernetes-dashboard
+```
+
+#### Uninstall
+
+```shell
+$ helm uninstall kubernetes-dashboard -n kubernetes-dashboard
+```
+
 ## Production
 
 Namespace: `cash-track`.
