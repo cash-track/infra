@@ -26,7 +26,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/mysql-backup
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -65,4 +65,4 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/mysql-backup
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=60s

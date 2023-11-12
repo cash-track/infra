@@ -20,7 +20,7 @@ jobs:
     runs-on: [self-hosted, Linux, x64]
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -54,7 +54,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/api
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -81,6 +81,41 @@ jobs:
 
       - name: Dry run
         run: kubectl apply --dry-run=server -f services/api/
+  gateway:
+    name: gateway
+    runs-on: [self-hosted, Linux, x64]
+    env:
+      REPO: cashtrack/gateway
+      GIT_REPO: https://github.com/cash-track/gateway
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch latest tag
+        id: latest_tag
+        run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.latest_tag.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/gateway/deployment.yml
+
+      - name: Dry run
+        run: kubectl apply --dry-run=server -f services/gateway/
 
   mysql:
     name: mysql
@@ -90,7 +125,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/mysql
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -126,7 +161,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/website
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -162,7 +197,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/frontend
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -198,7 +233,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/mysql-backup
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -234,7 +269,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/redis
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
