@@ -13,7 +13,6 @@ env:
   KUBECTL_BIN: https://storage.googleapis.com/kubernetes-release/release/v1.27.4/bin/linux/amd64/kubectl
 
 jobs:
-
   promtail:
     name: promtail
     runs-on: [ self-hosted, Linux, x64 ]
@@ -21,7 +20,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -47,5 +46,5 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/promtail
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=promtail --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=promtail --for condition=Ready --timeout=60s
 

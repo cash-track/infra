@@ -26,7 +26,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/api
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
