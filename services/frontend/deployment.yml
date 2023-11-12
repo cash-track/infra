@@ -54,3 +54,8 @@ spec:
                 configMapKeyRef:
                   key: WEBSITE_URL
                   name: common-config
+            - name: VUE_APP_GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: GATEWAY_URL
+                  name: common-config
