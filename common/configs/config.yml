@@ -6,7 +6,7 @@ metadata:
 data:
   GOOGLE_ANALYTICS_ID: 'UA-28063621-2'
   API_URL: 'https://api.cash-track.app'
-  GATEWAY_URL: 'https://api.cash-track.app'
+  GATEWAY_URL: 'https://gateway.cash-track.app'
   WEBSITE_URL: 'https://cash-track.app'
   WEBAPP_URL: 'https://my.cash-track.app'
   API_INTERNAL_URL: 'http://api.cash-track'
