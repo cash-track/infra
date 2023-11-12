@@ -54,6 +54,11 @@ spec:
                 configMapKeyRef:
                   key: WEBAPP_URL
                   name: common-config
+            - name: GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: GATEWAY_URL
+                  name: common-config
             - name: GOOGLE_ANALYTICS_ID
               valueFrom:
                 configMapKeyRef:

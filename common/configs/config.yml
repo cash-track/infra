@@ -4,7 +4,12 @@ metadata:
   name: common-config
   namespace: cash-track
 data:
+  GOOGLE_ANALYTICS_ID: 'UA-28063621-2'
   API_URL: 'https://api.cash-track.app'
+  GATEWAY_URL: 'https://api.cash-track.app'
   WEBSITE_URL: 'https://cash-track.app'
   WEBAPP_URL: 'https://my.cash-track.app'
-  GOOGLE_ANALYTICS_ID: 'UA-28063621-2'
+  API_INTERNAL_URL: 'http://api.cash-track'
+  GATEWAY_INTERNAL_URL: 'http://gateway.cash-track'
+  WEBSITE_INTERNAL_URL: 'http://website.cash-track'
+  WEBAPP_INTERNAL_URL: 'http://frontend.cash-track'
