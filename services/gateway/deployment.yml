@@ -1,0 +1,71 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gateway
+  namespace: cash-track
+spec:
+  selector:
+    matchLabels:
+      app: gateway
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+  revisionHistoryLimit: 3
+  template:
+    metadata:
+      name: gateway
+      namespace: cash-track
+      labels:
+        app: gateway
+    spec:
+      automountServiceAccountToken: false
+      containers:
+        - name: gateway
+          image: cashtrack/gateway:latest
+          ports:
+            - containerPort: 80
+              name: http
+          livenessProbe:
+            httpGet:
+              port: 80
+              path: /live
+          readinessProbe:
+            httpGet:
+              port: 80
+              path: /ready
+          resources:
+            requests:
+              cpu: 100m
+              memory: 50Mi
+            limits:
+              cpu: 200m
+              memory: 100Mi
+          envFrom:
+            - configMapRef:
+                name: gateway-config
+          env:
+            - name: GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: GATEWAY_URL
+                  name: common-config
+            - name: API_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: API_INTERNAL_URL
+                  name: common-config
+            - name: WEBSITE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBSITE_URL
+                  name: common-config
+            - name: WEBAPP_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBAPP_URL
+                  name: common-config
+            - name: CAPTCHA_SECRET
+              valueFrom:
+                secretKeyRef:
+                  key: CAPTCHA_SECRET_KEY
+                  name: common-secret
