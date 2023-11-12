@@ -195,6 +195,7 @@ $ kubectl apply -f ./services/mysql
 $ kubectl apply -f ./services/mysql-backup 
 $ kubectl apply -f ./services/mysql-exporter 
 $ kubectl apply -f ./services/api
+$ kubectl apply -f ./services/gateway
 $ kubectl apply -f ./services/website
 $ kubectl apply -f ./services/frontend
 $ kubectl exec deployments/api -it -- php app.php migrate
@@ -219,6 +220,16 @@ $ kubectl rollout restart deployment/api                      # Redeploy current
 $ kubectl exec deployments/api -it -- php app.php cache:clean
 $ kubectl exec deployments/api -it -- php app.php migrate
 $ kubectl exec deployments/api -it -- php app.php newsletter:send Newsletter\\TelegramChannelMail --test 1
+```
+
+#### Gateway
+
+```shell
+$ kubectl set image deployment/gateway gateway=cashtrack/gateway:1.2.9    # Deploy new tag
+$ kubectl rollout status deployment/gateway                               # Watch deployment status
+$ kubectl rollout undo deployment/gateway                                 # Rollback current deployment
+$ kubectl rollout history deployment/gateway                              # List past deployment revision
+$ kubectl rollout restart deployment/gateway                              # Redeploy currently deployed tag
 ```
 
 #### Website

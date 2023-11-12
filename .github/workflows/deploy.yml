@@ -7,6 +7,10 @@ on:
         description: 'API image tag (default last)'
         type: string
         required: false
+      gatewayTag:
+        description: 'Gateway image tag (default last)'
+        type: string
+        required: false
       websiteTag:
         description: 'Website image tag (default last)'
         type: string
@@ -43,7 +47,7 @@ jobs:
     runs-on: [self-hosted, Linux, x64]
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -72,7 +76,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/mysql
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -123,7 +127,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/redis
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -175,7 +179,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/api
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -214,19 +218,70 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/api
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=api --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=api --for condition=Ready --timeout=120s
+
+  gateway:
+    name: gateway
+    runs-on: [self-hosted, Linux, x64]
+    needs:
+      - api
+    env:
+      REPO: cashtrack/gateway
+      GIT_REPO: https://github.com/cash-track/gateway
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Install kubectl
+        run: |
+          curl -LO ${{ env.KUBECTL_BIN }}
+          chmod +x ./kubectl
+          sudo mv ./kubectl /usr/local/bin/kubectl
+
+      - name: Configure kubectl
+        run: doctl kubernetes cluster kubeconfig save --expiry-seconds 600 ${{ env.CLUSTER }}
+
+      - name: Fetch latest release tag
+        id: latest
+        run: echo "tag=$(git ls-remote --refs --sort='version:refname' --tags ${{ env.GIT_REPO }} | cut -d/ -f3- | tail -n1 | sed -e "s/^v//")" >> $GITHUB_OUTPUT
+
+      - name: Set image tag
+        id: release
+        env:
+          INPUT_TAG: ${{ inputs.gatewayTag }}
+          LATEST_TAG: ${{ steps.latest.outputs.tag }}
+        run: echo "tag=$([ -z $INPUT_TAG ] && echo $LATEST_TAG || echo $INPUT_TAG)" >> $GITHUB_OUTPUT
+
+      - name: Update deployment
+        env:
+          IMAGE: ${{ env.REPO }}:${{ steps.release.outputs.tag }}
+        run: sed -i 's|${{ env.REPO }}:latest|'${IMAGE}'|' $GITHUB_WORKSPACE/services/gateway/deployment.yml
+
+      - name: Apply definition
+        run: kubectl apply -f $GITHUB_WORKSPACE/services/gateway/
+
+      - name: Verify deployment
+        run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/gateway
+
+      - name: Verify service ready
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=gateway --for condition=Ready --timeout=60s
 
   website:
     name: website
     runs-on: [self-hosted, Linux, x64]
     needs:
-      - api
+      - gateway
     env:
       REPO: cashtrack/website
       GIT_REPO: https://github.com/cash-track/website
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -265,19 +320,19 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/website
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=website --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=website --for condition=Ready --timeout=60s
 
   frontend:
     name: frontend
     runs-on: [self-hosted, Linux, x64]
     needs:
-      - api
+      - gateway
     env:
       REPO: cashtrack/frontend
       GIT_REPO: https://github.com/cash-track/frontend
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -316,7 +371,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/frontend
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=frontend --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=frontend --for condition=Ready --timeout=60s
 
   mysql-backup:
     name: mysql-backup
@@ -328,7 +383,7 @@ jobs:
       GIT_REPO: https://github.com/cash-track/mysql-backup
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -367,7 +422,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/mysql-backup
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-backup --for condition=Ready --timeout=60s
 
   mysql-exporter:
     name: mysql-exporter
@@ -376,7 +431,7 @@ jobs:
       - mysql
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -399,7 +454,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status deployment/mysql-exporter
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-exporter --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=mysql-exporter --for condition=Ready --timeout=60s
 
   prometheus:
     name: prometheus
@@ -410,7 +465,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -444,7 +499,7 @@ jobs:
       REPO: cashtrack/grafana
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Login to Docker Hub
         uses: docker/login-action@v2
@@ -475,7 +530,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -511,7 +566,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -547,7 +602,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -573,7 +628,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/promtail
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=promtail --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=promtail --for condition=Ready --timeout=60s
 
   node-exporter:
     name: node-exporter
@@ -584,7 +639,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
@@ -607,7 +662,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} rollout status daemonset/node-exporter
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=node-exporter --for condition=Ready --timeout=30s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=node-exporter --for condition=Ready --timeout=60s
 
   alertmanager:
     name: alertmanager
@@ -618,7 +673,7 @@ jobs:
       NAMESPACE: monitoring
     steps:
       - name: Checkout Repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Install doctl
         uses: digitalocean/action-doctl@v2
