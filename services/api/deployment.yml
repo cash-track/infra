@@ -22,7 +22,7 @@ spec:
       initContainers:
         - name: migration
           image: cashtrack/api:latest
-          command: ["php", "app.php", "migrate", "-s"]
+          command: ["php", "app.php", "migrate", "-s", "-n"]
           envFrom:
             - secretRef:
                 name: common-secret
