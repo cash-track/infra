@@ -39,15 +39,40 @@ spec:
               cpu: 400m
               memory: 500Mi
           env:
-            - name: BASE_URL
+            - name: NUXT_PUBLIC_BASE_URL
               valueFrom:
                 configMapKeyRef:
                   key: WEBSITE_URL
                   name: common-config
-            - name: API_URL
+            - name: NUXT_PUBLIC_WEB_APP_URL
               valueFrom:
                 configMapKeyRef:
-                  key: API_URL
+                  key: WEBAPP_URL
+                  name: common-config
+            - name: NUXT_PUBLIC_GATEWAY_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: GATEWAY_URL
+                  name: common-config
+            - name: NUXT_PUBLIC_GOOGLE_ANALYTICS_ID
+              valueFrom:
+                configMapKeyRef:
+                  key: GOOGLE_ANALYTICS_ID
+                  name: common-config
+            - name: NUXT_PUBLIC_CAPTCHA_CLIENT_KEY
+              valueFrom:
+                secretKeyRef:
+                  key: CAPTCHA_CLIENT_KEY
+                  name: common-secret
+            - name: NUXT_PUBLIC_GOOGLE_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  key: GOOGLE_API_CLIENT_ID
+                  name: common-secret
+            - name: BASE_URL
+              valueFrom:
+                configMapKeyRef:
+                  key: WEBSITE_URL
                   name: common-config
             - name: WEB_APP_URL
               valueFrom:
@@ -69,14 +94,8 @@ spec:
                 secretKeyRef:
                   key: CAPTCHA_CLIENT_KEY
                   name: common-secret
-            - name: CAPTCHA_SECRET_KEY
-              valueFrom:
-                secretKeyRef:
-                  key: CAPTCHA_SECRET_KEY
-                  name: common-secret
             - name: GOOGLE_CLIENT_ID
               valueFrom:
                 secretKeyRef:
                   key: GOOGLE_API_CLIENT_ID
                   name: common-secret
-
