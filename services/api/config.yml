@@ -24,3 +24,5 @@ data:
   CORS_ALLOWED_ORIGINS: "https://cash-track.app,https://my.cash-track.app"
   REDIS_CONNECTION: "redis-0.redis.cash-track.svc.cluster.local:6379"
   RR_HTTP_NUM_WORKERS: "6"
+  AUTH_PASSKEY_SERVICE_ID: "cash-track.app"
+  AUTH_PASSKEY_SERVICE_NAME: "Cash Track"
