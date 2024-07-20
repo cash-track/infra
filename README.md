@@ -33,11 +33,25 @@ DigitalOcean managed cluster is used.
 $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.8.1/deploy/static/provider/do/deploy.yaml
 ```
 
+#### Upgrade
+
+```shell
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/do/deploy.yaml
+```
+
+Note. If you see some errors like "field is immutable", check for which k8s resources the error is. Most likely
+you can delete old resource and try to apply again.
 
 ### Cert Manager
 
 ```shell
 $ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.9.1/cert-manager.yaml
+```
+
+#### Upgrade
+
+```shell
+$ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.1/cert-manager.yaml
 ```
 
 
