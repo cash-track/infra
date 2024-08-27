@@ -82,6 +82,20 @@ $ cp common/actions-runner/.github-runner-secret.yml.example common/actions-runn
 
 Add GitHub personal access token to `common/actions-runner/github-runner-secret.yml`. Make sure you added all required permissions (see https://github.com/actions-runner-controller/actions-runner-controller#deploying-using-pat-authentication).
 
+#### Update Secret
+
+Regenerate your GitHub personal access token in [Tokens](https://github.com/settings/tokens) page. Once done encode it using Base64 encoding:
+
+```shell
+$ echo -n 'your-personal-access-token' | base64
+```
+
+Update Base64 encoded token in `common/actions-runner/github-runner-secret.yml` file then execute
+
+```shell
+$ kubectl apply -f common/actions-runner/github-runner-secret.yml
+```
+
 #### Upgrade
 
 See https://github.com/actions/actions-runner-controller/blob/master/charts/actions-runner-controller/docs/UPGRADING.md
