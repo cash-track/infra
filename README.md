@@ -42,6 +42,8 @@ $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/co
 Note. If you see some errors like "field is immutable", check for which k8s resources the error is. Most likely
 you can delete old resource and try to apply again.
 
+Note. If you don't see `nginx_*` metrics, make sure `--enable-metrics=true` is set for ingress-nginx-controller pod arguments.
+
 ### Cert Manager
 
 ```shell
@@ -94,6 +96,7 @@ Update Base64 encoded token in `common/actions-runner/github-runner-secret.yml` 
 
 ```shell
 $ kubectl apply -f common/actions-runner/github-runner-secret.yml
+$ kubectl rollout restart -n actions-runner-system deployment/actions-runner-controller
 ```
 
 #### Upgrade
