@@ -3,9 +3,13 @@ kind: Service
 metadata:
   name: mysql
   namespace: cash-track
+  annotations:
+    tailscale.com/expose: 'true'
+    tailscale.com/hostname: ct-prod-mysql
 spec:
-  clusterIP: None
   selector:
     app: mysql
   ports:
     - port: 3306
+      name: mysql
+      targetPort: mysql
