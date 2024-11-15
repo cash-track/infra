@@ -3,9 +3,13 @@ kind: Service
 metadata:
   name: prometheus
   namespace: monitoring
+  annotations:
+    tailscale.com/expose: 'true'
+    tailscale.com/hostname: ct-prod-prometheus
 spec:
-  clusterIP: None
   selector:
     app: prometheus
   ports:
     - port: 9090
+      name: prometheus
+      targetPort: prometheus

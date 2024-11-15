@@ -119,57 +119,51 @@ $ helm upgrade actions-runner-controller \
   --version ${CHART_VERSION}
  ```
 
-### Kubernetes Dashboard
+### Tailscale
 
-For the dashboard it is recommended to use [Kubernetes Dashboard projecs](https://github.com/kubernetes/dashboard). See [full installation instruction](https://gist.github.com/bikram20/4f4dbbaf5fcc874d5daee2e3b780d919).
+Optionally to allow accessing internal cluster resources through tunnel Tailscale can be installed on cluster as an operator that exposes resources
 
-#### Install
-
-```shell
-$ helm repo add kubernetes-dashboard https://kubernetes.github.io/dashboard/
-$ helm upgrade \
-    --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
-    --create-namespace \
-    --namespace kubernetes-dashboard \
-    --set app.ingress.enabled=false \
-    --set metrics-server.enabled=false \
-    --set cert-manager.enabled=false \
-    --set nginx.enabled=false
-```
-
-#### Usage
+Follow [instruction](https://tailscale.com/kb/1236/kubernetes-operator) where you'll get OAuth credentials to prepare and execute:
 
 ```shell
-$ export POD_NAME=$(kubectl get pods -n kubernetes-dashboard -l "app.kubernetes.io/name=kubernetes-dashboard,app.kubernetes.io/instance=kubernetes-dashboard" -o jsonpath="{.items[0].metadata.name}")
-$ kubectl -n kubernetes-dashboard port-forward $POD_NAME 8443:8443
-```
-
-Then open https://127.0.0.1:8443/ and use kubeconfig from DigitalOcean to authenticate.
-
-#### Upgrade
-
-Go to `kubernetes-dashboard` dir on your local where chart values will be downloaded.
-
-```shell
+$ helm repo add tailscale https://pkgs.tailscale.com/helmcharts
 $ helm repo update
-$ helm search repo kubernetes-dashboard
-$ helm pull kubernetes-dashboard/kubernetes-dashboard --untar
-```
-Modify values according your needs in `kubernetes-dashboard` directory.
-
-```shell
-$ helm ls
 $ helm upgrade \
-    --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
-    --create-namespace \
-    --namespace kubernetes-dashboard
+  --install \
+  tailscale-operator \
+  tailscale/tailscale-operator \
+  --namespace=tailscale \
+  --create-namespace \
+  --set-string oauth.clientId="{OAuth-Client-ID}" \
+  --set-string oauth.clientSecret="{OAuth-Client-Secret}" \
+  --wait
 ```
 
-#### Uninstall
+Now to expose any of your `Service` to the internal network add annotations
+
+```yaml
+metadata:
+  annotations:
+    tailscale.com/expose: 'true'
+    tailscale.com/hostname: ct-prod-grafana # Follow convention `ct-prod-{service-name}`
+```
+
+As soon as Tailscale connected on the device, service should be accessible as `http://cp-prod-grafana`
+
+#### Troubleshooting
+
+In case for existing service configured to expose does not appear in tailnet - recreate it:
 
 ```shell
-$ helm uninstall kubernetes-dashboard -n kubernetes-dashboard
+$ kubectl delete -n monitoring service alertmanager
+$ kubectl apply -f services/alertmanager/service.yml
 ```
+
+To enable operator's debug logs add operator config to the original installation command (before `--wait`):
+```shell
+--set operatorConfig.logging=debug
+```
+
 
 ## Production
 
@@ -330,6 +324,17 @@ $ kubectl port-forward service/redis 63790:6379               # Connect to Redis
 $ kubectl exec pods/mysql-0 -it -- bash                       # SSH into a Pod
 $ kubectl exec pods/mysql-0 --container backup -it -- bash    # SSH into a specific container of a Pod
 ```
+
+### Exposed Services to internal
+
+The list of exposed services available via Tailscale.
+
+- AlertManager: [http://ct-prod-alertmanager:9093](http://ct-prod-alertmanager:9093)
+- Grafana: [http://ct-prod-grafana:80](http://ct-prod-grafana:80)
+- Prometheus: [http://ct-prod-prometheus:9090](http://ct-prod-prometheus:9090)
+- MySQL: `tcp://ct-prod-mysql:3306`
+- Redis: `tcp://ct-prod-redis:6379`
+- MySQL: `tcp://tb-prod-mysql:3306` (Telegram bots)
 
 ### Pod stuck in `Terminating` state
 

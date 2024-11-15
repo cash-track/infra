@@ -3,10 +3,13 @@ kind: Service
 metadata:
   name: alertmanager
   namespace: monitoring
+  annotations:
+    tailscale.com/expose: 'true'
+    tailscale.com/hostname: ct-prod-alertmanager
 spec:
-  clusterIP: None
   selector:
     app: alertmanager
   ports:
-    - name: alertmanager
-      port: 9093
+    - port: 9093
+      name: alertmanager
+      targetPort: alertmanager
