@@ -1,5 +1,8 @@
 name: deploy-monitoring
 
+on:
+  workflow_dispatch:
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
