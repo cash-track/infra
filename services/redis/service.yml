@@ -3,11 +3,13 @@ kind: Service
 metadata:
   name: redis
   namespace: cash-track
+  annotations:
+    tailscale.com/expose: 'true'
+    tailscale.com/hostname: ct-prod-redis
 spec:
-  clusterIP: None
   selector:
     app: redis
   ports:
     - port: 6379
-      targetPort: 6379
       name: redis
+      targetPort: redis
