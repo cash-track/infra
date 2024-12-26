@@ -342,3 +342,17 @@ The list of exposed services available via Tailscale.
 $ kubectl delete pods <pod> --grace-period=0 --force            # First try to force remove <pod>
 $ kubectl patch pod <pod> -p '{"metadata":{"finalizers":null}}' # If first attempt didn't work, try this one
 ```
+
+### Cert Manager stuck in not ready
+
+If you see certain logs in the pod output repeated many times:
+
+```
+"Failed to generate serving certificate, retrying..." err="internal error: CA certificate has expired, try again later"
+```
+
+Run the following command to trigger regenerate CA
+
+```shell 
+$ kubectl delete secret -n cert-manager cert-manager-webhook-ca
+```
