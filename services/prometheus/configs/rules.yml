@@ -284,7 +284,7 @@ groups:
         "for": "15m"
         "labels":
           "severity": "warning"
-      - "alert": "TempoCompactorsTooManyOutstandingBlocks"
+      - "alert": "TempoCompactorsTooManyOutstandingBlocksWarning"
         "annotations":
           "message": "There are too many outstanding compaction blocks in {{ $labels.cluster }}/{{ $labels.namespace }} for tenant {{ $labels.tenant }}, increase compactor's CPU or add more compactors."
           "runbook_url": "https://github.com/grafana/tempo/tree/main/operations/tempo-mixin/runbook.md#TempoCompactorsTooManyOutstandingBlocks"
@@ -293,7 +293,7 @@ groups:
         "for": "6h"
         "labels":
           "severity": "warning"
-      - "alert": "TempoCompactorsTooManyOutstandingBlocks"
+      - "alert": "TempoCompactorsTooManyOutstandingBlocksCritical"
         "annotations":
           "message": "There are too many outstanding compaction blocks in {{ $labels.cluster }}/{{ $labels.namespace }} for tenant {{ $labels.tenant }}, increase compactor's CPU or add more compactors."
           "runbook_url": "https://github.com/grafana/tempo/tree/main/operations/tempo-mixin/runbook.md#TempoCompactorsTooManyOutstandingBlocks"
