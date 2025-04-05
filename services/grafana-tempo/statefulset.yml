@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: grafana-tempo
+  namespace: monitoring
+spec:
+  selector:
+    matchLabels:
+      app: grafana-tempo
+  serviceName: grafana-tempo
+  replicas: 1
+  revisionHistoryLimit: 3
+  updateStrategy:
+    type: OnDelete
+  template:
+    metadata:
+      labels:
+        app: grafana-tempo
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        supplementalGroups:
+          - 0
+      initContainers:
+        - name: grafana-tempo-data-permission-fix
+          securityContext:
+            privileged: true
+            runAsUser: 0
+          image: grafana/tempo:2.7.2
+          command: [ "chown", "10001:10001", "/var/tempo" ]
+          volumeMounts:
+            - name: grafana-tempo-data
+              mountPath: /var/tempo
+      containers:
+        - name: grafana-tempo
+          imagePullPolicy: Always
+          image: grafana/tempo:2.7.2
+          args:
+            - --config.file=/etc/tempo/config.yaml
+          env:
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://grafana-tempo:4317
+            - name: OTEL_EXPORTER_OTLP_PROTOCOL
+              value: grpc
+          ports:
+            - containerPort: 14268
+              name: jaeger-ingest
+            - containerPort: 14250
+              name: jaeger-grpc
+            - containerPort: 3200
+              name: tempo
+            - containerPort: 9095
+              name: tempo-grpc
+            - containerPort: 4317
+              name: otlp-grpc
+            - containerPort: 4318
+              name: otlp-http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 100Mi
+          volumeMounts:
+            - name: grafana-tempo-configs
+              mountPath: /etc/tempo
+            - name: grafana-tempo-data
+              mountPath: /var/tempo
+      volumes:
+        - name: grafana-tempo-configs
+          configMap:
+            name: grafana-tempo-configs
+  volumeClaimTemplates:
+    - metadata:
+        name: grafana-tempo-data
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: 10Gi
