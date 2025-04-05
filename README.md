@@ -203,6 +203,7 @@ $ kubectl create -n monitoring configmap prometheus-configs --from-file=./servic
 $ kubectl create -n monitoring configmap alertmanager-configs --from-file=./services/alertmanager/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap grafana-configs --from-file=./services/grafana/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap grafana-loki-configs --from-file=./services/grafana-loki/configs -o yaml --dry-run=client | kubectl apply -f -
+$ kubectl create -n monitoring configmap grafana-tempo-configs --from-file=./services/grafana-tempo/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap promtail-configs --from-file=./services/promtail/configs -o yaml --dry-run=client | kubectl apply -f -
 ```
 
@@ -213,6 +214,7 @@ $ kubectl apply -f ./services/prometheus
 $ kubectl apply -f ./services/node-exporter
 $ kubectl apply -f ./services/grafana
 $ kubectl apply -f ./services/grafana-loki
+$ kubectl apply -f ./services/grafana-tempo
 $ kubectl apply -f ./services/promtail
 $ kubectl apply -f ./services/alertmanager
 $ kubectl apply -f ./services/redis 
