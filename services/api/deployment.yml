@@ -65,6 +65,10 @@ spec:
                 secretKeyRef:
                   key: MYSQL_PASSWORD
                   name: mysql-secret
+            - name: OTEL_SERVICE_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
       containers:
         - name: api
           image: cashtrack/api:latest
