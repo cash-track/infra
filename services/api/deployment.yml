@@ -139,3 +139,8 @@ spec:
                 configMapKeyRef:
                   name: api-config
                   key: RR_HTTP_NUM_WORKERS
+            - name: OTEL_SERVICE_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+
