@@ -1,8 +1,6 @@
 global:
   scrape_interval: 15s
   evaluation_interval: 15s
-remote_write:
-  - url: http://prometheus-0.prometheus.monitoring.svc.cluster.local:9090/api/v1/write
 alerting:
   alertmanagers:
     - static_configs:

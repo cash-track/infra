@@ -27,6 +27,8 @@ spec:
       containers:
         - name: prometheus
           image: prom/prometheus:v2.38.0
+          args:
+            - -web.enable-remote-write-receiver
           ports:
             - containerPort: 9090
               name: prometheus
