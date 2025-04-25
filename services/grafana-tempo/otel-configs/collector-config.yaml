@@ -1,0 +1,63 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 100
+    policies: [
+      {
+        name: filter-noise-policy,
+        type: and,
+        and:
+          {
+            and_sub_policy:
+              [
+                {
+                  # filter by service name
+                  name: service-name-policy,
+                  type: string_attribute,
+                  string_attribute:
+                    {
+                      key: service.name,
+                      values: [ "api-server", "api", ],
+                    },
+                },
+                {
+                  # filter by route
+                  name: route-healthcheck-policy,
+                  type: string_attribute,
+                  string_attribute:
+                    {
+                      key: http.target,
+                      invert_match: true,
+                      values: [ "/healthcheck" ],
+                      enabled_regex_matching: false,
+                    },
+                },
+                {
+                  name: keep-policy,
+                  type: always_sample
+                },
+              ],
+          },
+      },
+    ]
+
+exporters:
+  otlp:
+    endpoint: localhost:4319
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [otlp]

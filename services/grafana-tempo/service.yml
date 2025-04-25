@@ -13,15 +13,6 @@ spec:
     - port: 9095
       name: grafana-tempo-grpc
       targetPort: tempo-grpc
-    - port: 14268
-      name: grafana-tempo-jaeger-ingest
-      targetPort: jaeger-ingest
-    - port: 14250
-      name: grafana-tempo-jaeger-grpc
-      targetPort: jaeger-grpc
     - port: 4317
       name: grafana-tempo-otlp-grpc
       targetPort: otlp-grpc
-    - port: 4318
-      name: grafana-tempo-otlp-http
-      targetPort: otlp-http
