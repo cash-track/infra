@@ -39,12 +39,17 @@ spec:
           imagePullPolicy: Always
           image: grafana/tempo:2.7.2
           args:
+            - --config.expand-env=true
             - --config.file=/etc/tempo/config.yaml
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://localhost:4317
+              value: http://grafana-tempo:4317
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: grpc
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           ports:
             - containerPort: 3200
               name: tempo
@@ -77,6 +82,11 @@ spec:
           command:
             - "/otelcol-contrib"
             - "--config=/conf/collector-config.yaml"
+          env:
+            - name: MY_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
           ports:
             - containerPort: 4317
               name: otlp-grpc
