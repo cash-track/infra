@@ -1,6 +1,7 @@
 stream_over_http_enabled: true
 server:
   http_listen_port: 3200
+  grpc_listen_port: 9095
   log_level: info
 
 query_frontend:
@@ -25,7 +26,7 @@ distributor:
     otlp:
       protocols:
         grpc:
-          endpoint: "0.0.0.0:4319"
+          endpoint: ${MY_POD_IP}:4319
 
 ingester:
   max_block_duration: 5m # cut the headblock when this much time passes.
