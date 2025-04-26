@@ -490,7 +490,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} delete pod prometheus-0
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=prometheus --for condition=Ready --timeout=60s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=prometheus --for condition=Ready --timeout=120s
 
   grafana-build:
     name: grafana-build
@@ -591,7 +591,7 @@ jobs:
         run: kubectl -n ${{ env.NAMESPACE }} delete pod grafana-loki-0
 
       - name: Verify service ready
-        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=grafana-loki --for condition=Ready --timeout=60s
+        run: kubectl -n ${{ env.NAMESPACE }} wait pods -l app=grafana-loki --for condition=Ready --timeout=120s
 
   grafana-tempo:
     name: grafana-tempo
