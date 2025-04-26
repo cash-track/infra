@@ -33,5 +33,5 @@ data:
   OTEL_EXPORTER_OTLP_PROTOCOL: "grpc"
   OTEL_EXPORTER_OTLP_CLIENT: "grpc"
   OTEL_PHP_TRACES_PROCESSOR: "simple"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "http://grafana-tempo-0.grafana-tempo.monitoring.svc.cluster.local:4317"
-  OTEL_EXPORTER_OTLP_ENDPOINT_RR: "grafana-tempo-0.grafana-tempo.monitoring.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://grafana-tempo.monitoring.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT_RR: "grafana-tempo.monitoring.svc.cluster.local:4317"

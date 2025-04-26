@@ -1,0 +1,49 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 100
+    policies: [
+      {
+        name: noise-by-target-policy,
+        type: string_attribute,
+        string_attribute:
+          {
+            key: http.target,
+            invert_match: true,
+            values: [ "/healthcheck" ],
+            enabled_regex_matching: false,
+          },
+      },
+      {
+        name: noise-by-route-policy,
+        type: string_attribute,
+        string_attribute:
+          {
+            key: route.action,
+            invert_match: true,
+            values: [ "healthcheck" ],
+            enabled_regex_matching: false,
+          },
+      },
+    ]
+
+exporters:
+  otlp:
+    endpoint: localhost:4319
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [otlp]
