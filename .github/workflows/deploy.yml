@@ -621,6 +621,7 @@ jobs:
       - name: Apply definition
         run: |
           kubectl create -n ${{ env.NAMESPACE }} configmap grafana-tempo-configs --from-file=$GITHUB_WORKSPACE/services/grafana-tempo/configs -o yaml --dry-run=client | kubectl apply -f -
+          kubectl create -n ${{ env.NAMESPACE }} configmap grafana-tempo-otel-configs --from-file=$GITHUB_WORKSPACE/services/grafana-tempo/otel-configs -o yaml --dry-run=client | kubectl apply -f -
           kubectl apply -f $GITHUB_WORKSPACE/services/grafana-tempo/
 
       - name: Deploy service

@@ -42,35 +42,64 @@ spec:
             - --config.file=/etc/tempo/config.yaml
           env:
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
-              value: http://grafana-tempo:4317
+              value: http://localhost:4317
             - name: OTEL_EXPORTER_OTLP_PROTOCOL
               value: grpc
           ports:
-            - containerPort: 14268
-              name: jaeger-ingest
-            - containerPort: 14250
-              name: jaeger-grpc
             - containerPort: 3200
               name: tempo
             - containerPort: 9095
               name: tempo-grpc
-            - containerPort: 4317
-              name: otlp-grpc
-            - containerPort: 4318
-              name: otlp-http
           resources:
             requests:
               cpu: 10m
               memory: 100Mi
+          livenessProbe:
+            tcpSocket:
+              port: 9095
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 3200
+            initialDelaySeconds: 5
+            periodSeconds: 2
+            timeoutSeconds: 1
           volumeMounts:
             - name: grafana-tempo-configs
               mountPath: /etc/tempo
             - name: grafana-tempo-data
               mountPath: /var/tempo
+        - name: otel-collector
+          image: otel/opentelemetry-collector-contrib:latest
+          command:
+            - "/otelcol-contrib"
+            - "--config=/conf/collector-config.yaml"
+          ports:
+            - containerPort: 4317
+              name: otlp-grpc
+          volumeMounts:
+            - name: grafana-tempo-otel-configs
+              mountPath: /conf
+          resources:
+            requests:
+              cpu: 10m
+              memory: 50Mi
+          livenessProbe:
+            tcpSocket:
+              port: 4317
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            timeoutSeconds: 5
       volumes:
         - name: grafana-tempo-configs
           configMap:
             name: grafana-tempo-configs
+        - name: grafana-tempo-otel-configs
+          configMap:
+            name: grafana-tempo-otel-configs
   volumeClaimTemplates:
     - metadata:
         name: grafana-tempo-data

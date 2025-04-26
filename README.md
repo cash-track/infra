@@ -204,6 +204,7 @@ $ kubectl create -n monitoring configmap alertmanager-configs --from-file=./serv
 $ kubectl create -n monitoring configmap grafana-configs --from-file=./services/grafana/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap grafana-loki-configs --from-file=./services/grafana-loki/configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap grafana-tempo-configs --from-file=./services/grafana-tempo/configs -o yaml --dry-run=client | kubectl apply -f -
+$ kubectl create -n monitoring configmap grafana-tempo-otel-configs --from-file=./services/grafana-tempo/otel-configs -o yaml --dry-run=client | kubectl apply -f -
 $ kubectl create -n monitoring configmap promtail-configs --from-file=./services/promtail/configs -o yaml --dry-run=client | kubectl apply -f -
 ```
 
