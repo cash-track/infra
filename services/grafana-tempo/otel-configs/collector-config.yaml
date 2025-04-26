@@ -12,39 +12,25 @@ processors:
     num_traces: 100
     policies: [
       {
-        name: filter-noise-policy,
-        type: and,
-        and:
+        name: noise-by-target-policy,
+        type: string_attribute,
+        string_attribute:
           {
-            and_sub_policy:
-              [
-                {
-                  # filter by service name
-                  name: service-name-policy,
-                  type: string_attribute,
-                  string_attribute:
-                    {
-                      key: service.name,
-                      values: [ "api-server", "api", ],
-                    },
-                },
-                {
-                  # filter by route
-                  name: route-healthcheck-policy,
-                  type: string_attribute,
-                  string_attribute:
-                    {
-                      key: http.target,
-                      invert_match: true,
-                      values: [ "/healthcheck" ],
-                      enabled_regex_matching: false,
-                    },
-                },
-                {
-                  name: keep-policy,
-                  type: always_sample
-                },
-              ],
+            key: http.target,
+            invert_match: true,
+            values: [ "/healthcheck" ],
+            enabled_regex_matching: false,
+          },
+      },
+      {
+        name: noise-by-route-policy,
+        type: string_attribute,
+        string_attribute:
+          {
+            key: route.action,
+            invert_match: true,
+            values: [ "healthcheck" ],
+            enabled_regex_matching: false,
           },
       },
     ]
