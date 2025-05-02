@@ -13,5 +13,5 @@ data:
   CSRF_ENABLED: "true"
   OTEL_SERVICE_NAME: "gateway"
   OTEL_SERVICE_NAMESPACE: "cash-track"
-  OTEL_EXPORTER_OTLP_ENDPOINT: "grafana-tempo.monitoring.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "http://grafana-tempo.monitoring.svc.cluster.local:4317"
   OTEL_EXPORTER_OTLP_INSECURE: "true"

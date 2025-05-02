@@ -23,6 +23,17 @@ processors:
           },
       },
       {
+        name: noise-by-http-route-policy,
+        type: string_attribute,
+        string_attribute:
+          {
+            key: http.route,
+            invert_match: true,
+            values: [ "/live", "/ready" ],
+            enabled_regex_matching: false,
+          },
+      },
+      {
         name: noise-by-route-policy,
         type: string_attribute,
         string_attribute:
