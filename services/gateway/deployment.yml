@@ -69,3 +69,7 @@ spec:
                 secretKeyRef:
                   key: CAPTCHA_SECRET_KEY
                   name: common-secret
+            - name: OTEL_SERVICE_INSTANCE_ID
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
