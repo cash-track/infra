@@ -11,3 +11,7 @@ data:
   CORS_ALLOWED_ORIGINS: "https://cash-track.app,https://my.cash-track.app"
   REDIS_CONNECTION: "redis-0.redis.cash-track.svc.cluster.local:6379"
   CSRF_ENABLED: "true"
+  OTEL_SERVICE_NAME: "gateway"
+  OTEL_SERVICE_NAMESPACE: "cash-track"
+  OTEL_EXPORTER_OTLP_ENDPOINT: "grafana-tempo.monitoring.svc.cluster.local:4317"
+  OTEL_EXPORTER_OTLP_INSECURE: "true"
