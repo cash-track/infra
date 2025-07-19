@@ -36,7 +36,7 @@ $ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/co
 #### Upgrade
 
 ```shell
-$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.10.1/deploy/static/provider/do/deploy.yaml
+$ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.13.0/deploy/static/provider/do/deploy.yaml
 ```
 
 Note. If you see some errors like "field is immutable", check for which k8s resources the error is. Most likely
