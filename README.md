@@ -56,6 +56,14 @@ $ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/downloa
 $ kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.15.1/cert-manager.yaml
 ```
 
+#### Certificate Renewal
+
+```shell 
+$ kubectl delete secret cert-manager-webhook-ca -n cert-manager
+$ kubectl rollout restart deployment cert-manager -n cert-manager
+$ kubectl rollout restart deployment cert-manager-webhook -n cert-manager
+```
+
 
 ### Metrics Server
 
@@ -149,6 +157,19 @@ metadata:
 ```
 
 As soon as Tailscale connected on the device, service should be accessible as `http://cp-prod-grafana`
+
+#### Upgrade 
+
+```shell
+$ helm upgrade \
+  tailscale-operator \
+  tailscale/tailscale-operator \
+  --namespace=tailscale \
+  --version 1.94.1 \
+  --set-string oauth.clientId="{OAuth-Client-ID}" \
+  --set-string oauth.clientSecret="{OAuth-Client-Secret}" \
+  --wait
+```
 
 #### Troubleshooting
 
