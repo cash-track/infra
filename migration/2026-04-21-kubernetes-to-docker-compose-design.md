@@ -178,7 +178,8 @@ Approach 1 is cleaner. Approach 2 is preferred if you want a one-click "run the 
 │       └── promtail/
 │
 ├── scripts/                       # NEW — helper scripts
-│   ├── replace-preflight.sh
+│   ├── replace-preflight.sh       # enforces backup freshness; honours FORCE_REPLACE_REASON
+│   ├── restore-to-new-volume.sh   # Block Volume corruption path (Section 17)
 │   └── bootstrap-buckets.sh       # one-time Spaces bucket creation
 │
 └── .gitignore                     # extended: secrets/, *.tfstate*, .terraform/, backend.hcl, /tmp/cashtrack-render/
@@ -239,42 +240,71 @@ backups:
 
 ### Disk on the Block Volume (target ~20 GB used of 25 GB provisioned)
 
-| Component | Expected |
-|---|---|
-| MySQL data (+headroom) | 5 GB |
-| Prometheus 7d retention | 4 GB |
-| Loki 7d retention | 5 GB |
-| Tempo 3d retention | 3 GB |
-| Grafana + Alertmanager | 1 GB |
-| Headroom (images, compose overhead) | ~2 GB |
-| **Total** | **~20 GB** |
+| Component | Expected | Cap enforced by |
+|---|---|---|
+| MySQL data (+headroom) | 5 GB | app schema + quarterly review |
+| Prometheus 7d retention | 4 GB | `--storage.tsdb.retention.size=3GB` + `--storage.tsdb.retention.time=7d` |
+| Loki 7d retention | 5 GB | `retention_period=168h` + `ingestion_rate_mb=2` / `ingestion_burst_size_mb=4` |
+| Tempo 3d retention | 3 GB | `compactor.compaction.block_retention=72h` + `ingester.max_bytes_per_trace` |
+| Grafana + Alertmanager | 1 GB | bounded by config size |
+| Headroom (images, compose overhead) | ~2 GB | — |
+| **Total** | **~20 GB** | — |
 
-Redis data is not persisted (accepted data loss on reboot); CSRF tokens invalidate on restart and users reauth on next mutating request.
+Redis data is not persisted (accepted data loss on reboot); CSRF tokens invalidate on restart and users reauth on next mutating request. `redis.conf` sets `maxmemory 250mb` + `maxmemory-policy allkeys-lru` so Redis cannot grow beyond its budget slot regardless of traffic.
 
-### Memory on the droplet (8 GB total, ~1.8 GB headroom)
+**Budgets are caps, not aspirations.** Every retention and rate limit above is wired into the service config, not the comment column in this table. A cardinality spike on Prometheus or a log-verbose deploy on Loki drops data at the ingestion boundary rather than silently eating disk.
 
-| Service | MB |
-|---|---|
-| api | 700 |
-| gateway | 100 |
-| frontend | 100 |
-| website (Nuxt SSR) | 500 |
-| mysql | 800 |
-| redis | 300 |
-| traefik | 100 |
-| prometheus | 500 |
-| grafana | 200 |
-| loki | 500 |
-| tempo | 500 |
-| alertmanager | 100 |
-| promtail | 100 |
-| node-exporter + mysql-exporter + ofelia | 150 |
-| tg-bot | 500 |
-| OS + Docker overhead | 600 |
-| **Total used** | **~5 750** |
-| **Headroom** | **~2 250** |
+**Block Volume IOPS are flat, not per-GB.** Unlike AWS gp3, DO Block Volumes cap at 5,000 write IOPS / 7,500 read IOPS / ~300 MB/s per volume regardless of size. "Resize the volume" is not a lever for I/O — it only buys capacity. If sustained I/O saturation appears, the lever is tuning (Section below) or splitting observability to a second storage tier (future work, Section 21).
 
-If sustained memory usage exceeds 6.5 GB or the `website` SSR spikes under traffic, resize to `s-4vcpu-16gb` ($96/mo) via `terraform apply`. Resize uses the droplet-replacement flow; Block Volume data is untouched.
+### Filesystem mount flags
+
+`/mnt/data` mounts with `defaults,nofail,noatime,nodiratime,discard` (fstab, set by cloud-init). `noatime` removes the metadata write on every read — a cheap win on a read-heavy workload and worth more than most tuning knobs on network-attached storage.
+
+### MySQL I/O tuning (baked into `cashtrack/mysql` image my.cnf)
+
+Defaults are tuned for network-attached SSD latency, not the 2005-era assumption of spinning disks:
+
+- `innodb_flush_log_at_trx_commit = 2` — fsync the log once per second instead of per commit. Trades ≤1s of commit durability for 5–50× write throughput on this class of storage. Appropriate at this workload scale; revisit if the app ever handles money movement that must be bit-precise at the exact instant of commit.
+- `innodb_flush_method = O_DIRECT` — bypass OS page cache for InnoDB data files. Removes double-caching (InnoDB buffer pool + kernel page cache).
+- `innodb_io_capacity = 2000`, `innodb_io_capacity_max = 4000` — tell InnoDB the disk is actually fast. Default (200) is 15+ years out of date and starves flush scheduling.
+- `innodb_buffer_pool_size = 512M` — matches the memory budget slot below. Explicit, not tuned-by-default.
+
+### Memory on the droplet (8 GB total, ~2.25 GB headroom)
+
+Budget values in the table below are also enforced as Docker `mem_limit` / `mem_reservation` per service in compose. A runaway service hits its cgroup limit, gets OOM-killed by the kernel at container scope (not host scope), and is restarted by Docker's `unless-stopped` policy within seconds. Neighbors are untouched. Without these limits, host-level OOM can kill MySQL (highest RSS) and take everything with it.
+
+| Service | Budget (MB) | `mem_limit` | `oom_score_adj` |
+|---|---|---|---|
+| api | 700 | 768m | -200 |
+| gateway | 100 | 128m | -200 |
+| frontend | 100 | 128m | -100 |
+| website (Nuxt SSR) | 500 | 640m | -100 |
+| mysql | 800 | 896m | **-500** (protected) |
+| redis | 300 | 320m | -200 |
+| traefik | 100 | 128m | -300 |
+| prometheus | 500 | 640m | +300 |
+| grafana | 200 | 256m | +300 |
+| loki | 500 | 640m | +500 |
+| tempo | 500 | 640m | +500 |
+| alertmanager | 100 | 128m | +300 |
+| promtail | 100 | 128m | +300 |
+| node-exporter + mysql-exporter + ofelia | 150 | 192m | 0 |
+| tg-bot | 500 | 640m | -100 |
+| OS + Docker overhead | 600 | — | — |
+| **Total used** | **~5 750** | — | — |
+| **Headroom** | **~2 250** | — | — |
+
+**OOM bias rationale.** If host-level OOM ever fires despite per-container limits, the kernel picks by `oom_score_adj`. MySQL at `-500` is the last thing to die; Loki/Tempo at `+500` die first. Observability loss → user-invisible, self-recovering. MySQL loss → data-loss risk. Bias accordingly.
+
+**Swap policy.** A small (1 GB) swapfile lives on the **droplet root disk** (local SSD), not on the Block Volume. Rationale: swap on network-attached storage turns memory pressure into thrashing — the box becomes unreachable for minutes under load as every anon-page swap-in competes with MySQL fsyncs on the same network device. 1 GB is enough to absorb transient malloc spikes from idle daemons; too small to enable deep thrashing. `vm.swappiness = 10` biases the kernel toward evicting page cache before anon pages. Configured in the `base` Ansible role.
+
+**Memory pressure alerting.** Host-level alert on Linux Pressure Stall Information via node-exporter's `node_pressure_memory_waiting_seconds_total` — fires when sustained memory pressure exceeds 10% for 2 minutes. PSI catches the *approach* to OOM, not the aftermath. Gives the operator a window to resize before the kernel decides for them.
+
+### Resize trigger
+
+If sustained memory usage exceeds 6.5 GB, PSI stays non-zero for hours, or the `website` SSR spikes under traffic, resize to `s-4vcpu-16gb` ($96/mo) via `terraform apply`. Resize uses the droplet-replacement flow; Block Volume data is untouched.
+
+"Resize" is a cheap lever. $48/mo for another 8 GB of RAM is cheaper than the operational complexity of any memory-engineering alternative — don't let swap, tuning, or per-service whittling delay the decision once measurements justify it.
 
 ---
 
@@ -313,12 +343,36 @@ runcmd:
   - apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - usermod -aG docker ops
 
-  # Block Volume mount — idempotent for replacement case
+  # Block Volume mount — idempotent for replacement case, robust against volume-attach race
   - |
+    set -e
     DEV=/dev/disk/by-id/scsi-0DO_Volume_${volume_name}
-    if ! blkid $DEV; then mkfs.ext4 -L cashtrack-data $DEV; fi
+
+    # Wait for the udev queue to drain, then poll for the specific device node.
+    # On replacement boots, the Block Volume attach can complete after cloud-init
+    # starts; without a bounded wait, `blkid` races and `mkfs` runs on a missing path.
+    udevadm settle --timeout=30 || true
+    for _ in $(seq 1 60); do [ -b "$DEV" ] && break; sleep 1; done
+    if [ ! -b "$DEV" ]; then
+      logger -s "cloud-init: Block Volume $DEV did not appear within 90s; aborting mount"
+      exit 1
+    fi
+
+    # Key the re-entrance check off the filesystem label, not the by-id path.
+    # `blkid $DEV` alone returns exit-code 2 for both "device missing" and
+    # "device empty" — ambiguous. Label lookup is unambiguous and also survives
+    # device-path changes across replacement.
+    if ! blkid -L cashtrack-data >/dev/null 2>&1; then
+      if blkid "$DEV" >/dev/null 2>&1; then
+        logger -s "cloud-init: $DEV has a filesystem but not label=cashtrack-data; refusing to reformat"
+        exit 1
+      fi
+      mkfs.ext4 -L cashtrack-data "$DEV"
+    fi
+
     mkdir -p /mnt/data
-    grep -q LABEL=cashtrack-data /etc/fstab || echo "LABEL=cashtrack-data /mnt/data ext4 defaults,nofail,discard 0 2" >> /etc/fstab
+    grep -q LABEL=cashtrack-data /etc/fstab || \
+      echo "LABEL=cashtrack-data /mnt/data ext4 defaults,nofail,noatime,nodiratime,discard 0 2" >> /etc/fstab
     mount -a
 
   - touch /var/lib/bootstrap-ready
@@ -336,8 +390,9 @@ runcmd:
 | Failure | Recovery |
 |---|---|
 | Cloud-init fails mid-way | Get the droplet's public IP (`doctl compute droplet list`); `make ssh-open IP=$(curl ifconfig.me)` → SSH to that public IP → inspect `/var/log/cloud-init-output.log` → fix → `cloud-init clean && cloud-init init`; then `make ssh-close` |
+| Block Volume not attached within 90s | Cloud-init `logger`s and aborts before touching `mkfs` — check DO console for volume-attach errors, fix, re-run cloud-init |
+| Volume has existing filesystem but not label `cashtrack-data` | Guard aborts; manual intervention required (intentional — avoids accidental reformat of a mis-attached volume) |
 | Tailscale auth key expired before use | Re-run `terraform apply` (provider rotates the key) |
-| Volume attached but wrong label | `mkfs` guard blocks reformat; manual intervention required (intentional) |
 | Ops SSH key lost | Emergency `tailscale ssh` still works; otherwise `terraform apply` with new fingerprint issues cloud-init for fresh droplets |
 
 ---
@@ -356,7 +411,7 @@ runcmd:
         path: /var/lib/bootstrap-ready
         timeout: 300
   roles:
-    - base                 # apt upgrade, unattended-upgrades, timezone, chrony
+    - base                 # unattended-upgrades + 04:00 UTC maint-window reboot, needrestart, swapfile, sysctls, timezone, chrony, PSI
     - docker               # daemon.json with log rotation + json-file size caps
     - firewall-refresh     # CF IP list → DO Cloud Firewall via digitalocean API
     - volume               # verifies /mnt/data mount, creates directory skeleton
@@ -364,6 +419,33 @@ runcmd:
     - compose-render       # renders .env, secrets/*.env, config/* ; uploads static compose/*.yml
     - compose-up           # `docker compose -f ... up -d --remove-orphans`
 ```
+
+### `base` role — OS-level hardening and maintenance policy
+
+Responsible for:
+
+- **Timezone** pinned to `UTC` (chrony for NTP). The maintenance-window reboot below is evaluated in UTC so behavior doesn't drift with DST.
+- **Swapfile** — 1 GB at `/swapfile` on the root disk (local SSD), permission `0600`, `vm.swappiness=10`, `vm.vfs_cache_pressure=50`. Root disk, not Block Volume (rationale: Section 5, Memory). Enough to absorb idle-daemon anon pages; too small to enable deep thrashing.
+- **`vm.overcommit_memory=1`** — classic overcommit. Matches Redis's recommended host config; avoids the heuristic overcommit's occasional OOM surprises.
+- **PSI exposure** — `psi=1` kernel cmdline (default on Ubuntu 22.04+), node-exporter picks up `/proc/pressure/{cpu,memory,io}` for pressure-based alerting (Section 15).
+- **Unattended-upgrades** installed and enabled for the security pocket, with an **explicit maintenance-window reboot policy**. Stock Ubuntu ships `Automatic-Reboot "false"`, which means kernel patches install but the box keeps running the vulnerable kernel indefinitely — the real default failure mode is stale-kernel, not surprise reboot. We flip that to a predictable, scheduled window:
+
+  ```
+  # /etc/apt/apt.conf.d/52unattended-upgrades-reboot (Ansible-managed)
+  Unattended-Upgrade::Automatic-Reboot "true";
+  Unattended-Upgrade::Automatic-Reboot-WithUsers "true";
+  Unattended-Upgrade::Automatic-Reboot-Time "04:00";
+  ```
+
+  04:00 UTC = low-traffic window for the EU-focused user base (AMS3 region). The reboot fires only when `/var/run/reboot-required` is set (i.e., when a kernel or core-library update actually needs it), not nightly. Expected cadence is a handful per year, each ≈60–180s of downtime. Documented as an accepted nightly-window trade in Section 19.
+- **`needrestart`** configured with `$nrconf{restart} = 'a'` in `/etc/needrestart/needrestart.conf`. Without this, a library update (libc/openssl/etc.) can hang unattended-upgrades waiting for an interactive prompt. `'a'` restarts services automatically post-upgrade — handles the majority of userland patches *without* a reboot.
+- **Reboot-required alerting.** Prometheus rule on `node_reboot_required == 1 for 7d` → Alertmanager → Telegram. Fires if for any reason the scheduled reboot didn't happen (e.g., Docker service stuck, fsck delay) and the box is running stale.
+- **Post-reboot smoke check.** A `@reboot` systemd oneshot runs `docker compose ps` and curls the local health endpoints; failures `logger -s` into `journalctl` and bump a node-exporter textfile metric `cashtrack_postreboot_check_ok` scraped into an Alertmanager rule. Catches "box rebooted at 04:00, MySQL didn't come back" before the operator wakes up.
+
+**Rejected alternatives.**
+
+- *Ubuntu Pro + Livepatch* — avoids reboot-for-kernel-CVE entirely (free tier covers up to 5 machines), but introduces a Canonical-account dependency and per-token expiry management for one droplet. The scheduled 04:00 window plus `needrestart` + reboot alerting covers the same security posture without the extra account plumbing.
+- *Stock `Automatic-Reboot "false"`* — silently ships you a vulnerable kernel until someone notices the reboot-required file. Not acceptable.
 
 All roles are tagged. Partial reruns:
 
@@ -443,6 +525,9 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
     command:
       - --configFile=/etc/traefik/traefik.yml
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: -300
 
   mysql:
     image: cashtrack/mysql:${VERSION_MYSQL}
@@ -456,14 +541,21 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+    mem_limit: 896m
+    mem_reservation: 768m
+    oom_score_adj: -500           # last thing the kernel kills under host OOM
 
   redis:
     image: cashtrack/redis:${VERSION_REDIS}
     restart: unless-stopped
     networks: [app]
     # intentionally NO volume
+    command: ["redis-server", "--maxmemory", "250mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
+    mem_limit: 320m
+    mem_reservation: 256m
+    oom_score_adj: -200
 
   ofelia:
     image: mcuadros/ofelia:v0.3.14
@@ -499,6 +591,9 @@ services:
       - traefik.http.routers.api.tls=true
       - traefik.http.services.api.loadbalancer.server.port=8080
       - traefik.http.routers.api.middlewares=retry@file
+    mem_limit: 768m
+    mem_reservation: 640m
+    oom_score_adj: -200
 
   mysql-backup:
     image: cashtrack/mysql-backup:${VERSION_MYSQL_BACKUP}
@@ -513,6 +608,8 @@ services:
       - ofelia.job-exec.backup.command=php app.php backup
       - ofelia.job-exec.purge-old.schedule=0 0 4 * * 0
       - ofelia.job-exec.purge-old.command=php app.php clear --days=7
+    mem_limit: 192m
+    mem_reservation: 128m
 
   mysql-exporter:
     image: prom/mysqld-exporter:v0.15.1
@@ -520,6 +617,58 @@ services:
     networks: [app]
     env_file: [secrets/mysql-exporter.env]
     command: ["--mysqld.address=mysql:3306"]
+```
+
+### `compose/compose.obs.yml` — observability services (abbreviated)
+
+All observability services carry explicit retention and rate caps at the process level. Budget table (Section 5) values become enforced, not suggested.
+
+```yaml
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    networks: [app]
+    volumes:
+      - /mnt/data/prometheus:/prometheus
+      - ./config/prometheus:/etc/prometheus:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=3GB      # hard cap; drops oldest blocks past limit
+      - --web.enable-lifecycle
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 300
+
+  loki:
+    image: grafana/loki:3.2.0
+    restart: unless-stopped
+    networks: [app]
+    volumes:
+      - /mnt/data/loki:/loki
+      - ./config/loki/loki.yml:/etc/loki/local-config.yaml:ro
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    # loki.yml sets: ingestion_rate_mb=2, ingestion_burst_size_mb=4,
+    # retention_period=168h, compactor.retention_enabled=true
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 500
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    restart: unless-stopped
+    networks: [app]
+    volumes:
+      - /mnt/data/tempo:/var/tempo
+      - ./config/tempo/tempo.yml:/etc/tempo.yaml:ro
+    command: ["-config.file=/etc/tempo.yaml"]
+    # tempo.yml sets: compactor.compaction.block_retention=72h,
+    # ingester.max_bytes_per_trace=5000000
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 500
 ```
 
 ### Traefik config
@@ -654,7 +803,13 @@ Secrets live in **1Password**, fetched at render time via the `op` CLI on the co
 - **Operator ergonomics** — edit in the 1Password desktop app, not in a terminal editor.
 - **Onboarding** — invite a teammate to the vault; no key distribution.
 
-Accepted trade-offs: runtime dependency on the 1Password API at deploy time (high uptime, and we are not deploying during SaaS outages anyway), and the Service Account token becomes the single most valuable credential (mitigated by scope + rotation).
+Accepted trade-offs:
+
+- **CI-driven deploys are hard-linked to 1Password API uptime.** `ansible-apply.yml`, `replace-droplet.yml`, and `bootstrap.yml` all require `op inject` on the runner, which authenticates against `1password.com`. During a 1P API outage, CI cannot render secrets → cannot deploy, cannot replace the droplet from CI.
+- **Operator-laptop deploys survive most 1P outages.** The 1Password desktop app maintains a local encrypted cache of the vault; an operator who was recently signed in can run `op read` / `op inject` against the cache via the CLI even when `1password.com` is unreachable. That converts "unbounded downtime during joint DR + 1P outage" into "operator runs `ansible-playbook site.yml` locally, same as a normal manual apply." Not as clean as a CI path, but an available break-glass.
+- **Service Account token is the single most valuable credential.** Mitigated by scope (vault read-only) + rotation (quarterly or on personnel change).
+
+Residual risk: joint outage (droplet gone + 1P API down + operator laptop either unavailable or never signed into the cache) → unbounded RTO until 1P comes back. Combined probability is small — 1P's published SLA is ~99.9% — but non-zero. Flagged in Section 19. If this ever becomes intolerable, add a break-glass encrypted snapshot of rendered `.env` files to the private `cash-track-tfstate` bucket, re-rendered after any vault edit; DR flow decrypts with an age key held by the operator.
 
 ### Storage
 
@@ -1018,10 +1173,13 @@ Three separate access keypairs. A compromised app container can reach `cash-trac
 
 ```hcl
 terraform {
+  required_version = ">= 1.10"
+
   backend "s3" {
-    bucket = "cash-track-tfstate"
-    key    = "prod/terraform.tfstate"
-    region = "us-east-1"
+    bucket       = "cash-track-tfstate"
+    key          = "prod/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true     # native S3 conditional-write locking; DO Spaces supports this
   }
 }
 ```
@@ -1046,10 +1204,19 @@ Initialized with `terraform -chdir=terraform init -backend-config=backend.hcl`.
 
 ### State locking
 
-DO Spaces does not expose a DynamoDB-equivalent. Approach:
+Two layers:
 
-1. **No locking, serialize via CI concurrency group.** `infra` repo workflows running `terraform apply` share `concurrency: group: terraform-prod` so two CI runs cannot collide. Operator discipline handles the single-human case. Spaces versioning is the rollback net.
-2. Optional: try Terraform 1.10's `use_lockfile = true`. If DO Spaces supports conditional writes it works; otherwise Terraform errors immediately and falls back to option 1.
+1. **Native S3 conditional-write locking via `use_lockfile = true`** (Terraform 1.10+). Writes a `prod/terraform.tfstate.tflock` object under a conditional `If-None-Match: *` precondition; DO Spaces supports S3 conditional writes, so two concurrent `terraform apply` invocations — whether from CI, operator laptop, or both — race on the lockfile and exactly one wins. This is the primary control.
+2. **CI concurrency group as belt-and-braces.** `infra` repo workflows running `terraform apply` additionally share `concurrency: group: terraform-prod` with `cancel-in-progress: false`, so CI can't stack multiple runs in the first place. Spaces versioning (90-day noncurrent retention on the bucket) remains the rollback net if either layer fails.
+
+**Local apply policy.** Because `use_lockfile` is now active, local `terraform apply` is technically safe — a CI-held lock will block a laptop run cleanly. But the operator laptop having a `backend.hcl` on disk is still an incident-risk surface. Treat local applies as break-glass, not routine:
+
+- Day-to-day changes: commit → push → CI runs `terraform apply` via `ansible-apply.yml`.
+- Operator-laptop apply: only when CI is unavailable (1Password outage on the runner, GitHub Actions incident, DR triage). Document the reason in the commit or incident log.
+
+To push harder on this, the `SPACES_TFSTATE_ID/KEY` can be CI-only (removed from the operator laptop entirely) and rotated on a short cadence — the laptop then cannot apply routinely, forcing CI use. Decision left to the operator team; the native lockfile makes either policy safe.
+
+**Rejected:** migrating state to a third-party HTTP backend (e.g., GitLab's free Terraform state). Adds an external dependency on a platform unrelated to our stack (DO + GitHub) for the single most critical file; the S3 backend is the portable default and `use_lockfile` closes the one gap that was motivating the workaround.
 
 ### Credentials flow
 
@@ -1145,6 +1312,55 @@ Beyond 7 days, if deeper history is needed, ship to Spaces via the ruler / Loki'
 
 The external check runs every 1 minute against `https://api.cash-track.app/healthcheck`, alerts on 3 consecutive failures.
 
+### Host-level alert rules (internal Prometheus → Alertmanager → Telegram)
+
+These rules catch host-class failures earlier than service health checks do. Authored day-one alongside the existing service alerts copied from `./infra/services/prometheus/configs/`.
+
+```yaml
+groups:
+  - name: host.rules
+    rules:
+      # Memory pressure — early warning before OOM.
+      # PSI "some" > 10% sustained for 2 min = tasks stalling on memory reclaim.
+      - alert: HostMemoryPressure
+        expr: rate(node_pressure_memory_waiting_seconds_total[2m]) > 0.10
+        for: 2m
+        labels: { severity: warning }
+        annotations:
+          summary: Memory pressure on {{ $labels.instance }} (PSI {{ $value | humanizePercentage }})
+
+      # Kernel/library patch installed, reboot pending. Scheduled 04:00 UTC
+      # window should clear this within 24h; fires if the reboot didn't happen
+      # (e.g., long-running process blocked shutdown, or Automatic-Reboot misfired).
+      - alert: HostRebootRequired
+        expr: node_reboot_required == 1
+        for: 7d
+        labels: { severity: warning }
+        annotations:
+          summary: Droplet has had a pending reboot for >7 days — scheduled window missed
+
+      # Backup freshness — primary defense against the `make replace` preflight
+      # ever firing during an incident. Catch stale backups before you need them.
+      - alert: MySQLBackupStale
+        expr: time() - mysql_backup_last_success_timestamp_seconds > 6 * 3600
+        for: 15m
+        labels: { severity: critical }
+        annotations:
+          summary: Last successful MySQL backup is {{ $value | humanizeDuration }} old (expected cadence 3h)
+
+      # Disk I/O saturation — proxy for the Block Volume contention risk flagged
+      # in Section 19. Investigate if it stays saturated (MySQL tuning, Loki/Prom
+      # retention caps, or escalate to storage split per Section 21).
+      - alert: BlockVolumeIOPSSaturated
+        expr: rate(node_disk_io_time_seconds_total{device=~"sda|vda|sd.|vd."}[5m]) > 0.80
+        for: 15m
+        labels: { severity: warning }
+        annotations:
+          summary: Block Volume IO utilization >80% sustained on {{ $labels.instance }}
+```
+
+The `mysql_backup_last_success_timestamp_seconds` metric is emitted by the backup container on successful upload (small PHP tweak to write a Prometheus textfile collector entry; node-exporter picks it up via the textfile collector). Same source feeds `scripts/replace-preflight.sh`.
+
 ### Dashboards
 
 Grafana provisioning (`config/grafana/provisioning/`):
@@ -1226,7 +1442,55 @@ kubectl scale deployment/frontend --replicas=1 -n cash-track
 
 ## 17. Droplet Replacement (DR) Runbook
 
-### Minimal command
+### Triage — escalate to replace, don't start there
+
+Replacement is a 5–8 min outage. Many "droplet down" incidents are faster to recover in place. Escalate in order:
+
+1. **Service-level** (most common). Single container unhealthy:
+   ```bash
+   tailscale ssh ops@cashtrack-prod-0 "docker compose logs --tail=200 <service>"
+   tailscale ssh ops@cashtrack-prod-0 "docker compose restart <service>"
+   ```
+   Typical recovery: 10–30s. No user visibility if Traefik healthcheck drains cleanly.
+
+2. **Docker daemon-level.** Compose works but containers won't start / won't pull:
+   ```bash
+   tailscale ssh ops@cashtrack-prod-0 "sudo systemctl restart docker && docker compose up -d"
+   ```
+   Typical recovery: 30–60s. All containers bounce; Traefik re-routes on health.
+
+3. **OS-level, droplet reachable.** System-wide wedged state (kernel panic avoided, but filesystem read-only, memory exhausted with no swap, etc.):
+   ```bash
+   doctl compute droplet-action power-cycle <droplet-id>
+   ```
+   Typical recovery: 60–120s. Block Volume reattaches on boot; Docker starts containers; post-reboot smoke check (base role) validates.
+
+4. **Droplet gone or unrecoverable.** Only now: `make replace`.
+
+Step 4 is what the rest of this section documents. Steps 1–3 cover the majority of real incidents and don't need the backup-freshness guard.
+
+### Block Volume corruption — a different runbook
+
+**`make replace` does not help you if the Block Volume itself is corrupt.** It destroys the droplet and reattaches the same volume; if the volume is the problem, the new droplet inherits it. Symptoms: mount fails in cloud-init, fsck errors on boot, MySQL refuses to start with `Operating system error number 22`, files missing after a DO storage incident.
+
+Separate procedure (`make restore-to-new-volume`):
+
+```bash
+# 1. Stop scheduled jobs + backup cron to avoid writes to a volume about to be discarded.
+# 2. Provision a new Block Volume + snapshot the old one (for forensics).
+terraform -chdir=terraform apply -var='new_volume=true'
+
+# 3. Run cloud-init-equivalent mount path on the new volume (formatted blank).
+# 4. Restore the latest good backup from cash-track-backups into MySQL on the new volume.
+ansible-playbook ops/backup-restore.yml -e backup_id=<id>
+
+# 5. Swap `digitalocean_volume.data` reference to the new volume.
+# 6. terraform apply (droplet replace, with the new volume in play).
+```
+
+RPO for this path = "last successful backup age." This is the one scenario where backup freshness actually determines data loss. Everything else (droplet gone, OS wedged, Docker broken) preserves the volume and RPO stays zero.
+
+### Droplet replacement — minimal command
 
 ```bash
 make replace
@@ -1262,16 +1526,32 @@ ansible-playbook -i ansible/inventory/prod/terraform.sh ansible/site.yml
 
 ### Guards
 
-- `mkfs` only runs if `blkid` shows no filesystem label (cloud-init).
-- `make replace` blocks if the latest object in `cash-track-backups` is >24h old (`replace-preflight.sh`).
+- `mkfs` only runs if the filesystem label `cashtrack-data` is not present (cloud-init; bounded wait + label check, see Section 6).
+- `make replace` blocks if the latest object in `cash-track-backups` is >24h old (`replace-preflight.sh`). The guard exists because the replacement flow can theoretically corrupt the volume (cloud-init bug, operator fat-finger on `-replace` target); the backup is the parachute, not the restore source. See "Backup-freshness override" below.
 - `prevent_destroy` on `digitalocean_volume.data` and `digitalocean_reserved_ip.main`.
+
+### Backup-freshness override (break-glass)
+
+`replace-preflight.sh` refuses to run when the last backup is >24h old. The upstream fix is the `MySQLBackupStale` alert (Section 15) firing at 6h so the stale-backup state is never silently reached. But if you're here and the guard is blocking an active incident, override like this:
+
+```bash
+FORCE_REPLACE_REASON="inc-<id>: <why backup is stale AND why replacing now is lower risk than waiting>" make replace
+```
+
+Rules:
+
+- Empty or unset `FORCE_REPLACE_REASON` → preflight still refuses. No bare `FORCE_REPLACE=1` flag.
+- Preflight writes the reason + operator identity + last backup age to `s3://cash-track-tfstate/audit/replace-overrides/<timestamp>.json` and posts an Alertmanager-style message to the ops Telegram channel: *"replace-preflight bypassed by $USER: $FORCE_REPLACE_REASON (last backup: 26h)"*. Non-optional — if either the audit write or the Telegram post fails, preflight aborts.
+- Expected cadence: approximately never. Every override is a postmortem input.
 
 ### What to verify after a replace
 
 1. `tailscale status` on the droplet
 2. `docker compose ps` all healthy
-3. Grafana: MySQL connection count, api p95, Traefik 5xx rate
-4. Smoke test externally: `curl https://api.cash-track.app/healthcheck`
+3. Post-reboot smoke check metric: `cashtrack_postreboot_check_ok == 1`
+4. Grafana: MySQL connection count, api p95, Traefik 5xx rate
+5. Smoke test externally: `curl https://api.cash-track.app/healthcheck`
+6. Row-count spot-check on the largest mutable tables vs a pre-incident snapshot (if available), to catch any silent filesystem damage the mount guard didn't detect.
 
 ---
 
@@ -1310,11 +1590,13 @@ Same replacement mechanics as `make replace`. RTO ~5–8 min.
 
 | Symptom | First action |
 |---|---|
-| Service returns 502 | `ssh ops@cashtrack-prod-0 'docker compose logs --tail=100 <service>'` |
+| Service returns 502 | `tailscale ssh ops@cashtrack-prod-0 'docker compose logs --tail=200 <service>'`; `docker compose restart <service>` if isolated |
 | Droplet unreachable via Tailscale | `make ssh-open IP=$(curl ifconfig.me)` → SSH to public IP |
-| MySQL OOM | Check Grafana for memory spikes; consider droplet resize or mysql cnf tuning |
-| Full volume | `docker system df` on droplet; Prometheus/Loki retention may need trimming |
-| Backups not running | Check Ofelia logs in Loki: `{container="ofelia"}` |
+| Container cgroup-OOM (single service) | Expected behavior — `docker inspect <ctr> --format '{{.State.OOMKilled}}'` confirms; Docker restarts it. If repeated, raise that service's `mem_limit` or investigate the allocation pattern. |
+| Host-level OOM or PSI alert sustained | `oom_score_adj` bias protects MySQL; expect Loki/Tempo to die first. Review Grafana memory panel + PSI; resize droplet if sustained >6.5 GB used or PSI >5% for hours. |
+| Full volume | `docker system df` on droplet; check retention caps are actually in effect (`promtool` / `tempo-cli`); `docker system prune -af --filter until=168h` |
+| Backups not running | `MySQLBackupStale` alert should have fired already; check Ofelia logs in Loki: `{container="ofelia"}` |
+| Reboot-required alert fires | Patch a kernel or library installed but the 04:00 window hasn't come around yet. Wait, or `sudo reboot` manually if urgent — the post-reboot smoke check validates recovery. |
 
 ---
 
@@ -1326,14 +1608,18 @@ Same replacement mechanics as `make replace`. RTO ~5–8 min.
 2. **Redis data loss on restart.** Accepted — CSRF tokens invalidate, users reauth on next mutating request.
 3. **Self-observability gap.** Alertmanager co-resident with the services it observes. External Cloudflare/GH Actions health check closes this.
 4. **Vertical resize is the only scaling lever.** No horizontal scale without a bigger re-architecture.
+5. **Scheduled maintenance-window reboots.** `Automatic-Reboot-Time "04:00"` UTC means a handful of ≈60–180s outages per year when a kernel or core-library patch requires reboot. Accepted in exchange for not running a vulnerable kernel. Alternative (rejected) was Ubuntu Pro + Livepatch.
+6. **Joint 1Password + droplet outage → unbounded CI-path RTO.** `ansible-apply.yml` / `replace-droplet.yml` / `bootstrap.yml` all require `op inject` on the CI runner. If 1P API is down at the same moment the droplet fails, CI cannot render secrets. Operator-laptop path survives via the 1P desktop cache (see Section 11). 1P's published SLA is ~99.9%; joint outage with a DO droplet failure is small but non-zero probability. Break-glass: operator runs `ansible-playbook site.yml` locally against the cached vault. Further mitigation (rejected day-one, reconsider if it bites): encrypted `.env` snapshot in the tfstate bucket, decrypted with an age key held by the operator.
 
 ### Things to monitor / revisit
 
 1. **MySQL in Docker with host bind-mount** — lower performance than bare-metal or managed. Monitor p95 query latency; revisit if >100ms on simple queries.
 2. **Traefik reads the Docker socket.** RCE on Traefik pivots to root. Mitigations: pin version, read-only socket mount, consider `docker-socket-proxy` later.
 3. **Tailscale daemon health** is a hard dependency for operator access. If Tailscale on the droplet dies, emergency SSH toggle is the fallback.
-4. **DO Spaces state locking** is absent. Concurrency group + operator discipline are the compensation; revisit if collisions ever happen.
-5. **GH Actions image pulls from Docker Hub** — subject to Docker Hub rate limits on replacement. Mitigation (future work): authenticated pulls or DO Container Registry.
+4. **Terraform state locking.** Now native via `use_lockfile = true` (DO Spaces supports S3 conditional writes, Terraform 1.10+). Belt-and-braces: CI concurrency group + Spaces versioning. Monitor for lockfile-related errors in practice; fall back to concurrency-group-only if conditional writes ever misbehave on the provider.
+5. **Block Volume I/O contention.** MySQL, Prometheus, Loki, Tempo share one 25 GB network-attached volume. DO caps per volume at 5,000 write IOPS / 7,500 read IOPS / ~300 MB/s — flat, not per-GB. Steady-state demand is well under ceiling; realistic risk is burst contention during Prometheus TSDB compaction collapsing MySQL commit p99. Mitigations in place: `noatime`, MySQL tuned for network SSD, hard retention + ingest caps on all three (Section 5). Monitor via `BlockVolumeIOPSSaturated` alert (Section 15); escalate to the storage-split option in Section 21 only if measurements show sustained saturation after tuning.
+6. **GH Actions image pulls from Docker Hub** — subject to Docker Hub rate limits on replacement. Mitigation (future work): authenticated pulls or DO Container Registry.
+7. **Swap on root disk, not Block Volume.** 1 GB root-disk swap buffers transient memory spikes without the network-device thrashing pathology of swap on Block Volume. If memory pressure becomes chronic (PSI alert firing regularly), don't grow swap — resize the droplet. Swap is insurance for spikes, not a capacity lever.
 
 ### Rejected alternatives
 
@@ -1342,6 +1628,10 @@ Same replacement mechanics as `make replace`. RTO ~5–8 min.
 - **Push-on-bump with a droplet-side Watchtower** — harder to audit; splits deploy state between GH and droplet.
 - **Jinja-templated compose files** — user preference for static compose + `.env`; sacrificing a small amount of DRY for cleaner diffs.
 - **Checking out the `infra` repo in service-deploy workflows** — needlessly requires PAT/App; direct SSH to on-droplet deploy script is simpler and matches today's `kubectl set image` shape.
+- **GitLab HTTP backend for Terraform state locking.** Adds a third-party free-tier dependency on a platform unrelated to our stack (DO + GitHub) for the single most critical file. Native S3 conditional-write locking (`use_lockfile = true`) closes the gap without the extra provider.
+- **Ubuntu Pro + Livepatch for kernel CVE patching.** Free tier covers the one droplet, but introduces a Canonical-account dependency and per-token expiry management. The scheduled 04:00 UTC maintenance window + `needrestart` + reboot-required alerting covers the same security posture with less account plumbing.
+- **Swap on the Block Volume.** Network-attached storage turns memory pressure into thrashing — minutes of unresponsiveness instead of a clean OOM kill. Root-disk swap only.
+- **Larger Block Volume to "buy" IOPS.** DO's per-volume IOPS cap is flat regardless of size (unlike AWS gp3). Resizing only buys capacity.
 
 ---
 
@@ -1362,11 +1652,13 @@ Explicitly not in this design:
 Items explicitly deferred:
 
 1. **Multi-droplet scaling.** `droplet_count > 1` is accepted by the Terraform code but stateful services (MySQL, Loki, etc.) must stay on droplet[0] (which holds the Block Volume and Reserved IP). Scaling stateless services (api, gateway, frontend, website) to additional droplets requires: (a) Traefik's mode rethought (e.g., one Traefik per droplet behind a DO LB, or move Traefik to droplet[0] only and add an internal LB), (b) session affinity decisions, (c) shared filesystem decisions (spec'd to use Spaces, not shared volumes).
-2. **Long-term observability archival.** Ship Loki chunks to Spaces with retention beyond 7d, accessed on-demand via a separate Loki instance pointed at Spaces.
-3. **GitHub App** replacing any remaining PATs for GitHub API calls (Docker Hub is an org secret, not a PAT, so not relevant; only applies if someday the infra repo needs to be checked out cross-repo).
-4. **Docker Socket Proxy** to harden Traefik's access.
-5. **Automated monthly Docker Hub rate-limit check** as a GH Actions cron — warn if approaching limits.
-6. **HA.** A genuinely HA architecture is a different design: managed MySQL, managed Redis, ≥2 droplets behind a DO LB, shared Spaces-backed file storage for per-request state, and a re-architected observability stack. Not attempted here.
+2. **Split storage tier for observability if I/O contention materializes.** Trigger: `BlockVolumeIOPSSaturated` fires sustained after MySQL tuning and retention caps are already in place. Landing spot: move `prometheus/`, `loki/`, `tempo/` bind-mounts from `/mnt/data` to `/var/lib/docker/volumes` on the droplet's local SSD (or a Premium Intel/AMD SKU for guaranteed local NVMe). Pair with `remote_write` to Grafana Cloud's free tier so pre-incident observability data survives droplet replacement — otherwise DR events lose the history needed for postmortem. Trade: zero RPO on observability → 7d RPO + ~free-tier-lag-seconds to Grafana Cloud. Accepted when measurement justifies.
+3. **Long-term observability archival.** Ship Loki chunks to Spaces with retention beyond 7d, accessed on-demand via a separate Loki instance pointed at Spaces.
+4. **Encrypted `.env` snapshot in tfstate bucket.** Mitigates the joint 1P-outage + droplet-outage tail (Section 19 accepted risk 6). Re-rendered after any vault edit; DR path decrypts with an age key held by the operator. Defer until the joint-outage probability proves non-academic.
+5. **GitHub App** replacing any remaining PATs for GitHub API calls (Docker Hub is an org secret, not a PAT, so not relevant; only applies if someday the infra repo needs to be checked out cross-repo).
+6. **Docker Socket Proxy** to harden Traefik's access.
+7. **Automated monthly Docker Hub rate-limit check** as a GH Actions cron — warn if approaching limits.
+8. **HA.** A genuinely HA architecture is a different design: managed MySQL, managed Redis, ≥2 droplets behind a DO LB, shared Spaces-backed file storage for per-request state, and a re-architected observability stack. Not attempted here.
 
 ---
 
