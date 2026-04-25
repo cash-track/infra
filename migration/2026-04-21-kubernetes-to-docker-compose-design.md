@@ -65,21 +65,23 @@ Four Docker Compose files, composed via `docker compose -f a.yml -f b.yml -f c.y
 | `compose.core.yml` | traefik, mysql, redis, ofelia |
 | `compose.app.yml` | api, gateway, frontend, website, mysql-backup, mysql-exporter |
 | `compose.obs.yml` | prometheus, node-exporter, grafana, loki, tempo, promtail, alertmanager |
-| `compose.telegram.yml` | tg-bot (connects to the shared MySQL under a separate database + user) |
+| `compose.telegram.yml` | crashers-bot, home-exporter (each its own image; share MySQL via the `telegram_bots` database) |
 
 Replica counts drop from 2 → 1 for api and gateway (no HA benefit on a single host). Traefik's retry middleware absorbs the brief restart window.
 
 ### MySQL tenant model
 
-A single MySQL server hosts multiple databases, one user per application:
+A single MySQL server hosts multiple databases. All application services share a single app user (matches the existing K8s setup — the K8s `mysql-secret.MYSQL_USER` is consumed identically by api, crashers-bot, home-exporter today). `mysql-init` creates each database and grants `ALL PRIVILEGES` on it to the shared user.
 
-| Database | Application user | Vault key |
+| Database | Used by | App user |
 |---|---|---|
-| `cashtrack` | `cashtrack_app` | `mysql_app_passwords.cashtrack_app` |
-| `telegram_bots` | `tg_bot_app` | `mysql_app_passwords.tg_bot_app` |
-| *(future)* `wordpress` | `wp_app` | `mysql_app_passwords.wp_app` |
+| `cashtrack` | api | `mysql.MYSQL_USER` (vault) |
+| `telegram_bots` | crashers-bot, home-exporter | `mysql.MYSQL_USER` (vault) |
+| *(future)* `wordpress` | wordpress | `mysql.MYSQL_USER` (vault) |
 
-Root credentials are used only by initial provisioning, `mysql-backup`, and `mysql-exporter`.
+Root credentials are used only by initial provisioning, `mysql-backup`, and `mysql-init` itself; `mysql-exporter` uses its own dedicated `exporter` MySQL user (DSN in the `mysql-exporter` vault).
+
+Trade-off: a compromised app service has read/write across every app DB. Per-app users (one per service) is a planned hardening pass after the cutover stabilizes — it requires a `mysql-app-users` vault item, a per-DB user creation step in `mysql-init`, and a re-grant after every backup restore.
 
 ### Estimated monthly cost
 
@@ -221,7 +223,8 @@ versions:
   mysql:        "1.0.8"
   mysql_backup: "0.0.5"
   redis:        "1.0.1"
-  tg_bot:       "1.0.0"
+  crashers_bot:  "1.0.0"
+  home_exporter: "1.0.0"
 
 retention:
   prometheus: "7d"
@@ -289,7 +292,8 @@ Budget values in the table below are also enforced as Docker `mem_limit` / `mem_
 | alertmanager | 100 | 128m | +300 |
 | promtail | 100 | 128m | +300 |
 | node-exporter + mysql-exporter + ofelia | 150 | 192m | 0 |
-| tg-bot | 500 | 640m | -100 |
+| crashers-bot | 250 | 320m | -100 |
+| home-exporter | 100 | 128m | 0 |
 | OS + Docker overhead | 600 | — | — |
 | **Total used** | **~5 750** | — | — |
 | **Headroom** | **~2 250** | — | — |
@@ -476,7 +480,8 @@ The runner does not run Ansible in the common case — it SSHes to the droplet a
 │   ├── mysql-exporter.env
 │   ├── alertmanager.env
 │   ├── grafana.env
-│   └── telegram.env
+│   ├── crashers-bot.env
+│   └── home-exporter.env
 ├── config/
 │   ├── traefik/{traefik.yml,dynamic.yml,origin-cert.pem,origin-key.pem}
 │   ├── prometheus/prometheus.yml
@@ -726,11 +731,13 @@ Docker-native cron with label-driven discovery. Schedules are visible in compose
 2. Add Ofelia labels to the service in the relevant `compose.*.yml`. Schedule syntax: 6-field cron (seconds precision) or `@every 1h`.
 3. Redeploy: `make deploy SERVICE=ofelia`.
 
-### Example — telegram bot jobs
+### Example — crashers-bot jobs
+
+Schedule list is a placeholder; populate from the existing K8s `crashers-bot` CronJobs / scheduled tasks during Stage 10.
 
 ```yaml
 services:
-  tg-bot:
+  crashers-bot:
     labels:
       - ofelia.enabled=true
       - ofelia.job-exec.daily-digest.schedule=0 0 8 * * *    # 08:00 UTC daily
@@ -753,18 +760,21 @@ Ofelia exposes Prometheus metrics (`ofelia_job_failures_total`, `ofelia_last_dur
 
 Example: a WordPress site sharing MySQL, served at `blog.cash-track.app`.
 
-1. **Add the database + user** — edit `ansible/roles/mysql-init/vars/databases.yml`:
+1. **Add the database** — edit `ansible/roles/mysql-init/vars/databases.yml`, append to the list:
    ```yaml
    databases:
-     - { name: wordpress, user: wp_app, password_op_ref: "op://cash-track-prod/mysql-app-users/WORDPRESS_APP_PASSWORD" }
+     - cashtrack
+     - telegram_bots
+     - wordpress
    ```
-2. **Add the secret in 1Password** — open the `cash-track-prod` vault in the desktop app; under the `mysql-app-users` item add field `WORDPRESS_APP_PASSWORD`. Also create a new item `wordpress` with fields for any WP-specific secrets (e.g. `WORDPRESS_AUTH_KEY`).
+   `mysql-init` grants the existing shared app user (`mysql.MYSQL_USER`) on the new DB. No new MySQL user, no new vault field.
+2. **Add WP-specific secrets in 1Password** — create a new vault item `wordpress` with fields for the WP-only keys (e.g. `WORDPRESS_AUTH_KEY`, `WORDPRESS_NONCE_KEY`). DB credentials come from the existing `mysql` vault.
 3. **Add a per-service env template** — `ansible/roles/compose-render/templates/wordpress.env.tpl`:
    ```ini
    WORDPRESS_DB_HOST=mysql
    WORDPRESS_DB_NAME=wordpress
-   WORDPRESS_DB_USER=wp_app
-   WORDPRESS_DB_PASSWORD={{ op_prefix }}/mysql-app-users/WORDPRESS_APP_PASSWORD
+   WORDPRESS_DB_USER={{ op_prefix }}/mysql/MYSQL_USER
+   WORDPRESS_DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
    WORDPRESS_AUTH_KEY={{ op_prefix }}/wordpress/WORDPRESS_AUTH_KEY
    ```
 4. **Register the template** in `ansible/roles/compose-render/defaults/main.yml` under `secret_files` (renders through `op inject`).
@@ -826,21 +836,33 @@ Each item is a "Secure Note" or "API Credential" in 1Password, with fields refer
 
 ```
 cash-track-prod/
-├── api                      fields: JWT_SECRET, CAPTCHA_SECRET_KEY, FIREBASE_CREDENTIALS,
-│                                     GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ...
-├── gateway                  fields: CAPTCHA_SECRET_KEY, ...
-├── mysql                    fields: ROOT_PASSWORD, REPLICATION_PASSWORD
-├── mysql-app-users          fields: CASHTRACK_APP_PASSWORD, TG_BOT_APP_PASSWORD, WP_APP_PASSWORD
-├── mysql-backup             fields: SPACES_KEY, SPACES_SECRET, BUCKET_NAME
+├── api                      fields: JWT_SECRET, JWT_PUBLIC_KEY, JWT_PRIVATE_KEY,
+│                                     ENCRYPTER_KEY, DB_ENCRYPTER_KEY
+├── common                   fields: CAPTCHA_CLIENT_KEY, CAPTCHA_SECRET_KEY,
+│                                     GOOGLE_API_*, MAIL_*, S3_*
+├── mysql                    fields: MYSQL_DATABASE, MYSQL_USER,
+│                                     MYSQL_PASSWORD, MYSQL_ROOT_PASSWORD
 ├── mysql-exporter           fields: DATA_SOURCE_NAME
 ├── alertmanager-telegram    fields: BOT_TOKEN, CHAT_ID
 ├── grafana                  fields: ADMIN_PASSWORD, SMTP_PASSWORD
-├── telegram-bot             fields: BOT_TOKEN, WEBHOOK_SECRET
-├── cloudflare-origin-cert   fields: CERT_PEM, KEY_PEM (attachments)
+├── crashers-bot             fields: per crashers-bot-secret (BOT_TOKEN, ...)
+├── home-exporter            fields: per home-exporter-secret
+├── cloudflare-origin-cert   attachment: cf-origin-cert.pem (PEM bundle)
 ├── tailscale                fields: OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
 ├── dockerhub                fields: USERNAME, TOKEN
-└── do-api                   fields: TOKEN (for firewall-refresh playbook + doctl)
+├── do-api                   fields: TOKEN (for firewall-refresh playbook + doctl)
+└── cash-track-tfstate       fields: ACCESS_KEY_ID, SECRET_ACCESS_KEY
+                                     (Spaces keypair for tfstate bucket;
+                                      operator renders backend.hcl from these)
 ```
+
+Dedup rules:
+
+- `common` holds every secret consumed by 2+ services (CAPTCHA, Google OAuth, mail, S3) — one rotation point.
+- `gateway` has no vault item: only secret it needs is `CAPTCHA_SECRET_KEY`, served from `common`.
+- `mysql-backup` has no vault item: pulls `MYSQL_ROOT_PASSWORD` + `MYSQL_DATABASE` from `mysql`, `S3_KEY` + `S3_SECRET` from `common`. Bucket name is a non-secret literal.
+- No `mysql-app-users` item: a single shared app user (`cashtrack`) lives in `mysql.MYSQL_USER` / `mysql.MYSQL_PASSWORD` and is granted on every app DB by `mysql-init`. Per-app users is a future hardening step.
+- Two telegram-namespace apps (`crashers-bot`, `home-exporter`) → two separate vault items, mirroring their separate K8s secrets.
 
 ### Templates reference secrets by `op://` URI
 
@@ -851,16 +873,30 @@ Templates live in git — reviewable in PRs, no secret material embedded.
 ```ini
 APP_ENV=prod
 DEBUG=false
+
+# api vault — api-only keys
 JWT_SECRET={{ op_prefix }}/api/JWT_SECRET
-CAPTCHA_SECRET_KEY={{ op_prefix }}/api/CAPTCHA_SECRET_KEY
-FIREBASE_CREDENTIALS={{ op_prefix }}/api/FIREBASE_CREDENTIALS
-GOOGLE_CLIENT_ID={{ op_prefix }}/api/GOOGLE_CLIENT_ID
-GOOGLE_CLIENT_SECRET={{ op_prefix }}/api/GOOGLE_CLIENT_SECRET
-DB_HOST=mysql
-DB_NAME=cashtrack
-DB_USER=cashtrack_app
-DB_PASSWORD={{ op_prefix }}/mysql-app-users/CASHTRACK_APP_PASSWORD
-...
+JWT_PUBLIC_KEY={{ op_prefix }}/api/JWT_PUBLIC_KEY
+JWT_PRIVATE_KEY={{ op_prefix }}/api/JWT_PRIVATE_KEY
+ENCRYPTER_KEY={{ op_prefix }}/api/ENCRYPTER_KEY
+DB_ENCRYPTER_KEY={{ op_prefix }}/api/DB_ENCRYPTER_KEY
+
+# common vault — shared with gateway, website, mysql-backup
+CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
+CAPTCHA_SECRET_KEY={{ op_prefix }}/common/CAPTCHA_SECRET_KEY
+GOOGLE_API_CLIENT_ID={{ op_prefix }}/common/GOOGLE_API_CLIENT_ID
+GOOGLE_API_CLIENT_SECRET={{ op_prefix }}/common/GOOGLE_API_CLIENT_SECRET
+MAIL_HOST={{ op_prefix }}/common/MAIL_HOST
+MAIL_PASSWORD={{ op_prefix }}/common/MAIL_PASSWORD
+S3_KEY={{ op_prefix }}/common/S3_KEY
+S3_SECRET={{ op_prefix }}/common/S3_SECRET
+# ... remaining GOOGLE_API_*, MAIL_*, S3_* keys
+
+# mysql vault — single shared app user
+DB_HOST=mysql:3306
+DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
+DB_USER={{ op_prefix }}/mysql/MYSQL_USER
+DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
 ```
 
 `op_prefix` resolves to `op://cash-track-prod` at render time. The two-step approach is used so that the same template works with a staging vault name in the future (just change the var).
@@ -1002,7 +1038,7 @@ GitHub org: cash-track
 │       ├── replace-droplet.yml      # NEW — workflow_dispatch
 │       └── bootstrap.yml            # NEW — workflow_dispatch
 │
-├── api, gateway, frontend, website, telegram-bot
+├── api, gateway, frontend, website, crashers-bot, home-exporter
 │   └── .github/workflows/
 │       ├── quality.yml              # calls org reusable quality-*.yml
 │       └── release.yml              # calls org reusable ship-service.yml on tag
@@ -1184,20 +1220,24 @@ terraform {
 }
 ```
 
-`terraform/backend.hcl` (not committed; `.gitignore`'d):
+`terraform/backend.hcl` (not committed; `.gitignore`'d; `chmod 600`). Operator renders it locally from the `cash-track-tfstate` vault item:
 
-```hcl
+```bash
+eval "$(op signin)"
+cat > terraform/backend.hcl <<EOF
 endpoints = {
   s3 = "https://ams3.digitaloceanspaces.com"
 }
-access_key                  = "..."
-secret_key                  = "..."
+access_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/ACCESS_KEY_ID)"
+secret_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/SECRET_ACCESS_KEY)"
 skip_credentials_validation = true
 skip_metadata_api_check     = true
 skip_requesting_account_id  = true
 skip_region_validation      = true
 skip_s3_checksum            = true
 use_path_style              = true
+EOF
+chmod 600 terraform/backend.hcl
 ```
 
 Initialized with `terraform -chdir=terraform init -backend-config=backend.hcl`.
@@ -1222,8 +1262,8 @@ To push harder on this, the `SPACES_TFSTATE_ID/KEY` can be CI-only (removed from
 
 | Actor | Where |
 |---|---|
-| Operator | `backend.hcl` on laptop, chmod 600, `.gitignore`'d |
-| CI (`infra` repo) | Org secrets `SPACES_TFSTATE_ID/KEY`, written to `backend.hcl` at job start, `shred -u` on cleanup |
+| Operator | Renders `backend.hcl` from `op://cash-track-prod/cash-track-tfstate/{ACCESS_KEY_ID,SECRET_ACCESS_KEY}` to laptop disk, chmod 600, `.gitignore`'d |
+| CI (`infra` repo) | Org secrets `SPACES_TFSTATE_ID/KEY` (mirror of the same vault item), written to `backend.hcl` at job start, `shred -u` on cleanup |
 
 ### Protect critical resources
 
@@ -1376,7 +1416,7 @@ Accessed via `https://grafana-cashtrack.<tailnet>.ts.net` (Tailscale Serve).
 ### Pre-cutover (any time beforehand)
 
 1. **Create the new Spaces bucket** `cash-track-tfstate` in AMS3 with "Block all public access". Existing `cash-track-storage` (public) and `cash-track-backups` (private) stay as-is. Create one dedicated access key for it.
-2. **Set up the 1Password vault** `cash-track-prod`: create items (`api`, `gateway`, `mysql`, `mysql-app-users`, `mysql-backup`, `mysql-exporter`, `alertmanager-telegram`, `grafana`, `telegram-bot`, `cloudflare-origin-cert`, `tailscale`, `dockerhub`, `do-api`) and populate from existing K8s secrets. Create a read-only Service Account scoped to the vault; store its token as `OP_SERVICE_ACCOUNT_TOKEN` org secret.
+2. **Set up the 1Password vault** `cash-track-prod`: create the 11 items per Section 11 (`api`, `common`, `mysql`, `mysql-exporter`, `alertmanager-telegram`, `grafana`, `crashers-bot`, `home-exporter`, `cloudflare-origin-cert`, `tailscale`, `dockerhub`, `do-api`) and populate from existing K8s secrets. Create a read-only Service Account scoped to the vault; store its token as `OP_SERVICE_ACCOUNT_TOKEN` org secret.
 3. **Provision infra:** `make apply && make bootstrap`. Wait for all containers green.
 4. **Restore from latest K8s MySQL backup:** `ansible-playbook ops/backup-restore.yml -e backup_id=latest`.
 5. **Internal smoke test** via Tailscale with `curl --resolve`:
@@ -1671,7 +1711,7 @@ When this design is approved and work begins, implementation proceeds in these s
 3. **Stage 2 — First provision.** `make apply && make bootstrap` brings up a droplet with core compose stack (traefik, mysql empty, redis, ofelia). Verify via Tailscale.
 4. **Stage 3 — App services.** Bring up api, gateway, frontend, website, mysql-backup, mysql-exporter. Restore from a K8s MySQL backup. Internal smoke test with `curl --resolve`.
 5. **Stage 4 — Observability.** Bring up prometheus, node-exporter, grafana, loki, tempo, promtail, alertmanager. Import dashboards. Verify alerts flow to Telegram (intentionally fire a test alert via `amtool alert add`).
-6. **Stage 5 — Telegram bot.** Bring up tg-bot with its Ofelia schedules.
+6. **Stage 5 — Telegram-namespace apps.** Bring up crashers-bot and home-exporter (each with its own image and env file); register Ofelia schedules for any cron-style jobs.
 7. **Stage 6 — CI/CD.** Create `cash-track/.github` repo with reusable workflows; update service repos' `release.yml`. Test a deploy to the droplet from a tag push in a scratch branch.
 8. **Stage 7 — Cutover.** Run the Section 16 runbook.
 9. **Stage 8 — Decommission.** After 48h observation, tear down DOKS.

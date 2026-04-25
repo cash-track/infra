@@ -20,7 +20,7 @@
 
 | # | Stage | Who | Context-window fit | Produces |
 |---|---|---|---|---|
-| 0 | Prerequisites: Spaces bucket, 1Password vault, org secrets | **[OPERATOR-ONLY]** | N/A | 3 Spaces buckets, 13 vault items, 5 org secrets |
+| 0 | Prerequisites: Spaces bucket, 1Password vault, org secrets | **[OPERATOR-ONLY]** | N/A | tfstate Spaces bucket, 11 vault items, 7 org secrets |
 | 1 | Repo scaffold + Terraform code | [CLAUDE CODE] | 1 session | `terraform/**`, Makefile, `.gitignore`, README rename |
 | 2 | Terraform init + plan review | **[OPERATOR-ONLY]** | N/A | `terraform plan` output, committed plan-review notes |
 | 3 | Ansible scaffold + base/docker/tailscale/volume roles | [CLAUDE CODE] | 1 session | `ansible/` with 4 roles |
@@ -30,9 +30,9 @@
 | 7 | First provision: `make apply && make bootstrap` | **[OPERATOR-ONLY]** | N/A | Running droplet with core stack (traefik/mysql/redis/ofelia) |
 | 8 | Restore MySQL backup + app-service smoke test | **[OPERATOR-ONLY]** | N/A | api/gateway/frontend/website/mysql-backup/mysql-exporter up, healthchecks green |
 | 9 | Observability stack: dashboards, rules, Alertmanager config | [CLAUDE CODE] | 1 session | Grafana provisioning, Prometheus rules copied from `./infra/services/`, Alertmanager routes |
-| 10 | Telegram bot stack + Ofelia schedules | [CLAUDE CODE] | 1 session | `compose.telegram.yml`, tg-bot env template, Ofelia labels |
+| 10 | Telegram-namespace apps (crashers-bot, home-exporter) + Ofelia schedules | [CLAUDE CODE] | 1 session | `compose.telegram.yml`, two env templates, Ofelia labels |
 | 11 | `cash-track/.github` reusable workflows | [CLAUDE CODE] + **[OPERATOR-ONLY]** repo creation + Tailscale ACL edit | 1 session | `ship-service.yml`, `ansible-apply.yml`, quality workflows |
-| 12 | Service-repo `release.yml` updates (api, gateway, frontend, website, telegram-bot) | [CLAUDE CODE] | 1 session | 5 release workflows calling org reusable |
+| 12 | Service-repo `release.yml` updates (api, gateway, frontend, website, crashers-bot, home-exporter) | [CLAUDE CODE] | 1 session | 6 release workflows calling org reusable |
 | 13 | Disable old K8s workflows (step 1: `workflow_dispatch`) | [CLAUDE CODE] | 1 session | Modified `deploy*.yml` triggers |
 | 14 | Cutover window (Section 16) | **[OPERATOR-ONLY]** | N/A | DNS flipped, K8s writers at 0 replicas |
 | 15 | 48h observation + decommission: tear down DOKS, move workflows to `workflows.disabled/`, rewrite README | **[OPERATOR-ONLY]** + [CLAUDE CODE] for README | 1 session | K8s deleted, new `README.md`, `README-kubernetes.md` |
@@ -55,21 +55,59 @@
 2. **Create the `cash-track-prod` 1Password vault.** Under your existing 1Password account, create a new vault named exactly `cash-track-prod`.
 3. **Create vault items and populate values from existing K8s secrets.** For each item below, create the item in 1Password and copy values out of K8s using `kubectl -n <ns> get secret <name> -o jsonpath='{.data.<key>}' | base64 -d` (run locally, paste into 1Password desktop app, never via any Claude-accessible channel).
 
-   | Item | Fields | Source K8s Secret(s) |
-   |---|---|---|
-   | `api` | `JWT_SECRET`, `CAPTCHA_SECRET_KEY`, `FIREBASE_CREDENTIALS`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `MAIL_PASSWORD`, `APP_SECRET`, any other env vars currently in the K8s `api` deployment secret | `cash-track/api-*` secrets |
-   | `gateway` | `CAPTCHA_SECRET_KEY`, any other gateway-specific | `cash-track/gateway-*` |
-   | `mysql` | `ROOT_PASSWORD`, `REPLICATION_PASSWORD` | `cash-track/mysql-*` |
-   | `mysql-app-users` | `CASHTRACK_APP_PASSWORD`, `TG_BOT_APP_PASSWORD` (generate new strong passwords; app will be pointed at these after restore) | New values — not in K8s yet |
-   | `mysql-backup` | `SPACES_KEY`, `SPACES_SECRET`, `BUCKET_NAME` = `cash-track-backups` | `cash-track/mysql-backup-*` |
-   | `mysql-exporter` | `DATA_SOURCE_NAME` = `exporter:<pw>@tcp(mysql:3306)/` (create `exporter` MySQL user in Stage 7) | Construct |
-   | `alertmanager-telegram` | `BOT_TOKEN`, `CHAT_ID` | Create a new Telegram bot via BotFather; add to a private channel; put CHAT_ID |
-   | `grafana` | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana admin if migrating dashboards; else generate |
-   | `telegram-bot` | `BOT_TOKEN`, `WEBHOOK_SECRET` | `telegram-bots/*` K8s secrets |
-   | `cloudflare-origin-cert` | `CERT_PEM`, `KEY_PEM` — upload as file attachments in 1Password | Cloudflare dashboard → SSL/TLS → Origin Server → existing cert, or mint a new 15-year origin cert |
-   | `tailscale` | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` | Tailscale admin → Settings → OAuth clients → new client, tags `tag:prod-server,tag:ci` |
-   | `dockerhub` | `USERNAME`, `TOKEN` | Existing Docker Hub personal access token (or mint new with read+write scope on `cashtrack/*`) |
-   | `do-api` | `TOKEN` | DO dashboard → API → generate new PAT scoped to `droplet:*, reserved_ip:*, volume:*, firewall:*, load_balancer:*, ssh_key:*, spaces:*, domain:*` |
+   Reference one-liners (run against the existing DOKS cluster):
+
+   ```shell
+   # tfstate bucket setup
+   aws s3api put-bucket-versioning \
+     --bucket cash-track-tfstate \
+     --endpoint=https://ams3.digitaloceanspaces.com \
+     --versioning-configuration Status=Enabled
+
+   aws s3api put-bucket-lifecycle-configuration \
+     --bucket cash-track-tfstate \
+     --endpoint=https://ams3.digitaloceanspaces.com \
+     --lifecycle-configuration file://infra/migration/tfstate.json
+
+   # K8s secrets to dump
+   for s in api-secret common-secret mysql-secret mysql-exporter-secret; do
+     echo "=== $s ==="
+     kubectl -n cash-track get secret "$s" -o json \
+       | jq -r '.data | to_entries[] | "\(.key)=\(.value | @base64d)"'
+   done
+   for s in crashers-bot-secret home-exporter-secret; do
+     echo "=== $s ==="
+     kubectl -n telegram-bots get secret "$s" -o json \
+       | jq -r '.data | to_entries[] | "\(.key)=\(.value | @base64d)"'
+   done
+   ```
+
+   **Vault catalog — 12 items.** Per-vault dedup decisions:
+   - **One `common` vault** holds every secret consumed by 2+ services (CAPTCHA, Google OAuth, mail, S3) so a key rotation touches one place. Values match the existing `common-secret` 1:1.
+   - **No `gateway` vault** — gateway only needs `CAPTCHA_SECRET_KEY`, which comes from `common`.
+   - **No `mysql-backup` vault** — mysql-backup pulls `MYSQL_ROOT_PASSWORD`+`MYSQL_DATABASE` from `mysql` and `S3_KEY`+`S3_SECRET` from `common`. Bucket name (`cash-track-backups`) is non-secret and lives in the `.env` template literal.
+   - **No `mysql-app-users` vault** — the cluster runs a single shared app user (`cashtrack`) granted on every app DB; that user's credentials live in `mysql.MYSQL_USER` / `mysql.MYSQL_PASSWORD` and are reused by api, crashers-bot, home-exporter. `mysql-init` grants the user on each database listed in `databases.yml`. (Per-app users is a future hardening step; deferred to keep the cutover small.)
+   - **Two telegram vaults** — `crashers-bot` and `home-exporter` are separate K8s deployments with separate secrets; mirroring that 1:1 in 1Password keeps audit logs and rotations app-scoped.
+   - `alertmanager-telegram` stays its own vault — different bot, different chat, monitoring-scoped.
+
+   | Vault item                 | Fields | Source K8s secret(s) | Consumed by |
+   |----------------------------|---|---|---|
+   | + `api`                    | `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`, `ENCRYPTER_KEY`, `DB_ENCRYPTER_KEY` | `cash-track/api-secret` | api |
+   | + `common`                 | `CAPTCHA_CLIENT_KEY`, `CAPTCHA_SECRET_KEY`, `GOOGLE_API_AUTH_PROVIDER_X509_CERT_URL`, `GOOGLE_API_AUTH_URI`, `GOOGLE_API_CLIENT_ID`, `GOOGLE_API_CLIENT_SECRET`, `GOOGLE_API_PROJECT_ID`, `GOOGLE_API_REDIRECT_URI`, `GOOGLE_API_TOKEN_URI`, `MAIL_HOST`, `MAIL_PASSWORD`, `MAIL_PORT`, `MAIL_USERNAME`, `S3_ENDPOINT`, `S3_KEY`, `S3_REGION`, `S3_SECRET` | `cash-track/common-secret` | api, gateway, website, mysql-backup |
+   | + `mysql`                  | `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | `cash-track/mysql-secret` | mysql, mysql-backup, mysql-init, api, crashers-bot, home-exporter |
+   | + `mysql-exporter`         | `DATA_SOURCE_NAME` (`exporter:<pw>@tcp(mysql:3306)/`) | `cash-track/mysql-exporter-secret` | mysql-exporter |
+   | + `alertmanager-telegram`  | `BOT_TOKEN`, `CHAT_ID` | New (BotFather + private channel) | alertmanager |
+   | `grafana`                  | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana if migrating; else generate | grafana |
+   | + `crashers-bot`           | TBD — populate by inspecting `kubectl -n telegram-bots get secret crashers-bot-secret`; expected: `BOT_TOKEN`, plus any app-specific keys | `telegram-bots/crashers-bot-secret` | crashers-bot |
+   | + `home-exporter`          | TBD — populate by inspecting `kubectl -n telegram-bots get secret home-exporter-secret` | `telegram-bots/home-exporter-secret` | home-exporter |
+   | + `cloudflare-origin-cert` | `cf-origin-cert.pem` (file attachment, contains both cert + key) | Cloudflare dashboard → SSL/TLS → Origin Server | traefik |
+   | + `tailscale`              | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` (tags `tag:prod-server,tag:ci`) | Tailscale admin → OAuth clients | terraform (cloud-init authkey mint) |
+   | + `dockerhub`              | `USERNAME`, `TOKEN` | Docker Hub PAT, scope `read+write` on `cashtrack/*` | CI |
+   | + `do-api`                 | `TOKEN` | DO dashboard PAT (scope `droplet:*, reserved_ip:*, volume:*, firewall:*, load_balancer:*, ssh_key:*, spaces:*, domain:*`) | terraform, firewall-refresh |
+   | + `cash-track-tfstate`     | `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY` | Spaces access keypair generated in step 1 (dedicated; not shared with `cash-track-backups` or `cash-track-storage`) | terraform `backend.hcl` (operator local), CI org secrets `SPACES_TFSTATE_ID/KEY` |
+
+   When dumping `crashers-bot-secret` and `home-exporter-secret`, fill in the `TBD` rows above with the actual key list before moving past Stage 0. The Stage 10 env templates (`crashers-bot.env.tpl`, `home-exporter.env.tpl`) reference these field names directly.
+
 
 4. **Create a read-only 1Password Service Account.**
    - 1Password admin console → Integrations → Service Accounts → new.
@@ -99,12 +137,12 @@
 
 ### Verification checklist
 
-- [ ] `doctl spaces ls` shows `cash-track-tfstate` in `ams3`, private.
-- [ ] `op vault get cash-track-prod` succeeds and lists 13 items.
-- [ ] All 13 items have populated fields (open each in desktop app, eyeball).
-- [ ] `gh secret list --org cash-track` (or org Settings UI) shows the 7 org secrets above.
-- [ ] Service Account token is saved in the operator's personal 1Password (offline break-glass copy) and as `OP_SERVICE_ACCOUNT_TOKEN` GitHub org secret.
-- [ ] Operator has added `backend.hcl` values (access key + secret) to their personal 1Password for local terraform use.
+- [x] `doctl spaces ls` shows `cash-track-tfstate` in `ams3`, private.
+- [x] `op vault get cash-track-prod` succeeds and lists 12 items.
+- [x] All 12 items have populated fields (open each in desktop app, eyeball). `crashers-bot` and `home-exporter` field lists are filled in from their K8s secrets.
+- [x] `gh secret list --org cash-track` (or org Settings UI) shows the 7 org secrets above.
+- [x] Service Account token is saved in the operator's personal 1Password (offline break-glass copy) and as `OP_SERVICE_ACCOUNT_TOKEN` GitHub org secret.
+- [x] `op item get cash-track-tfstate --vault cash-track-prod --field ACCESS_KEY_ID` returns the Spaces access key from step 1 (used to render `backend.hcl` in Stage 2).
 
 ### Signal "done"
 
@@ -193,17 +231,21 @@ Tell operator: *"Stage 1 committed. Ready for Stage 2: please run `terraform ini
 
 ### Action items
 
-1. **Create `./infra/terraform/backend.hcl`** (NOT COMMITTED — already in `.gitignore`):
-   ```hcl
+1. **Render `./infra/terraform/backend.hcl`** (NOT COMMITTED — already in `.gitignore` from Stage 1; `chmod 600` after writing):
+   ```bash
+   eval "$(op signin)"
+   cat > infra/terraform/backend.hcl <<EOF
    endpoints = { s3 = "https://ams3.digitaloceanspaces.com" }
-   access_key                  = "<from 1Password: cash-track-tfstate access key>"
-   secret_key                  = "<from 1Password: cash-track-tfstate secret key>"
+   access_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/ACCESS_KEY_ID)"
+   secret_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/SECRET_ACCESS_KEY)"
    skip_credentials_validation = true
    skip_metadata_api_check     = true
    skip_requesting_account_id  = true
    skip_region_validation      = true
-   skip_s3_checksum            = true
+   skip_s3_checksum             = true
    use_path_style              = true
+   EOF
+   chmod 600 infra/terraform/backend.hcl
    ```
 2. **Source DO + Tailscale credentials into shell:**
    ```bash
@@ -365,14 +407,18 @@ No operator action. Proceed to Stage 4.
 - Create: `./infra/compose/config/alertmanager/alertmanager.yml` (telegram_configs receiver per design §9)
 - Create: `./infra/compose/config/promtail/promtail.yml` (docker SD)
 - Create: `./infra/ansible/roles/compose-render/templates/api.env.tpl` (per design §11)
-- Create: `./infra/ansible/roles/compose-render/templates/gateway.env.tpl`
+- Create: `./infra/ansible/roles/compose-render/templates/gateway.env.tpl` (only `CAPTCHA_SECRET` + non-secret config; still rendered through `op inject` for uniformity)
+- Create: `./infra/ansible/roles/compose-render/templates/website.env.tpl` (`CAPTCHA_CLIENT_KEY`, `GOOGLE_API_CLIENT_ID` from `common`)
 - Create: `./infra/ansible/roles/compose-render/templates/mysql.env.tpl`
 - Create: `./infra/ansible/roles/compose-render/templates/mysql-backup.env.tpl`
 - Create: `./infra/ansible/roles/compose-render/templates/mysql-exporter.env.tpl`
 - Create: `./infra/ansible/roles/compose-render/templates/alertmanager.env.tpl`
 - Create: `./infra/ansible/roles/compose-render/templates/grafana.env.tpl`
-- Create: `./infra/ansible/roles/compose-render/templates/telegram.env.tpl`
+- Create: `./infra/ansible/roles/compose-render/templates/crashers-bot.env.tpl`
+- Create: `./infra/ansible/roles/compose-render/templates/home-exporter.env.tpl`
 - Create: `./infra/ansible/roles/compose-render/templates/env.tpl` (top-level `.env` with `VERSION_*` vars and `DOMAIN=...`)
+
+Frontend has no secrets in K8s (only `common-config` env vars), so no `frontend.env.tpl` is rendered through `op inject` — its config goes into the top-level `.env` or directly in the compose service `environment:` block.
 
 ### Action items
 
@@ -393,7 +439,7 @@ No operator action. Proceed to Stage 4.
    - `tempo` (full)
    - `promtail` — `image: grafana/promtail:3.2.0`, volume `/var/run/docker.sock`, `/var/lib/docker/containers:/var/lib/docker/containers:ro`, `./config/promtail:/etc/promtail:ro`
    - `alertmanager` — `image: prom/alertmanager:v0.27.0`, `env_file: [secrets/alertmanager.env]`, volume `/mnt/data/alertmanager:/alertmanager`, `./config/alertmanager:/etc/alertmanager:ro`
-4. **Write `compose.telegram.yml`** — structure only for now; tg-bot service body filled in Stage 10. Include the shared `networks` reference.
+4. **Write `compose.telegram.yml`** — structure only for now; `crashers-bot` and `home-exporter` service bodies filled in Stage 10. Include the shared `networks` reference.
 5. **Write `config/traefik/traefik.yml`** exactly per design §8.
 6. **Write `config/traefik/dynamic.yml`** per design §8 + §14 `cloudflare-only` middleware. The cert file paths point to `/etc/traefik/origin-cert.pem` and `/etc/traefik/origin-key.pem` — these are rendered by Ansible compose-render role (Stage 5) from the 1Password `cloudflare-origin-cert` attachments.
 7. **Write `config/prometheus/prometheus.yml`** — scrape jobs for:
@@ -423,21 +469,48 @@ No operator action. Proceed to Stage 4.
 11. **Write `config/grafana/provisioning/dashboards/dashboards.yml`** — dashboard provider config pointing at `/etc/grafana/provisioning/dashboards/json/` (JSON files added in Stage 9).
 12. **Write `config/alertmanager/alertmanager.yml`** — telegram_configs receiver; values `bot_token` and `chat_id` come from `$ALERTMANAGER_TELEGRAM_BOT_TOKEN` / `$ALERTMANAGER_TELEGRAM_CHAT_ID`, sourced from `alertmanager.env` via `env_file`. Use `{{ env "..." }}` Go-template syntax for alertmanager 0.26+.
 13. **Write `config/promtail/promtail.yml`** — Docker SD config targeting the Docker socket; scrape containers on the `cashtrack-app` network; parse JSON logs.
-14. **Write the `.env.tpl` files** per design §11. Every secret value is an `op://cash-track-prod/<item>/<field>` reference. No plaintext secrets. Example `api.env.tpl`:
+14. **Write the `.env.tpl` files** per design §11. Every secret value is an `op://cash-track-prod/<item>/<field>` reference. No plaintext secrets. Cross-service keys (CAPTCHA, Google, MAIL, S3) live in `common`; per-service items (`api`, `mysql`, `mysql-exporter`, `crashers-bot`, `home-exporter`) hold only that service's keys. Example `api.env.tpl` (mirrors the `envFrom: common-secret + api-secret + mysql-secret` composition in `infra/services/api/deployment.yml`):
+
     ```ini
     APP_ENV=prod
     DEBUG=false
+
+    # api-secret
     JWT_SECRET={{ op_prefix }}/api/JWT_SECRET
-    CAPTCHA_SECRET_KEY={{ op_prefix }}/api/CAPTCHA_SECRET_KEY
-    # ... per design §11
-    DB_HOST=mysql
-    DB_NAME=cashtrack
-    DB_USER=cashtrack_app
-    DB_PASSWORD={{ op_prefix }}/mysql-app-users/CASHTRACK_APP_PASSWORD
-    REDIS_HOST=redis
-    REDIS_PORT=6379
+    JWT_PUBLIC_KEY={{ op_prefix }}/api/JWT_PUBLIC_KEY
+    JWT_PRIVATE_KEY={{ op_prefix }}/api/JWT_PRIVATE_KEY
+    ENCRYPTER_KEY={{ op_prefix }}/api/ENCRYPTER_KEY
+    DB_ENCRYPTER_KEY={{ op_prefix }}/api/DB_ENCRYPTER_KEY
+
+    # common-secret (shared with gateway / website / mysql-backup)
+    CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
+    CAPTCHA_SECRET_KEY={{ op_prefix }}/common/CAPTCHA_SECRET_KEY
+    GOOGLE_API_CLIENT_ID={{ op_prefix }}/common/GOOGLE_API_CLIENT_ID
+    GOOGLE_API_CLIENT_SECRET={{ op_prefix }}/common/GOOGLE_API_CLIENT_SECRET
+    GOOGLE_API_PROJECT_ID={{ op_prefix }}/common/GOOGLE_API_PROJECT_ID
+    GOOGLE_API_AUTH_URI={{ op_prefix }}/common/GOOGLE_API_AUTH_URI
+    GOOGLE_API_TOKEN_URI={{ op_prefix }}/common/GOOGLE_API_TOKEN_URI
+    GOOGLE_API_REDIRECT_URI={{ op_prefix }}/common/GOOGLE_API_REDIRECT_URI
+    GOOGLE_API_AUTH_PROVIDER_X509_CERT_URL={{ op_prefix }}/common/GOOGLE_API_AUTH_PROVIDER_X509_CERT_URL
+    MAIL_HOST={{ op_prefix }}/common/MAIL_HOST
+    MAIL_PORT={{ op_prefix }}/common/MAIL_PORT
+    MAIL_USERNAME={{ op_prefix }}/common/MAIL_USERNAME
+    MAIL_PASSWORD={{ op_prefix }}/common/MAIL_PASSWORD
+    S3_ENDPOINT={{ op_prefix }}/common/S3_ENDPOINT
+    S3_REGION={{ op_prefix }}/common/S3_REGION
+    S3_KEY={{ op_prefix }}/common/S3_KEY
+    S3_SECRET={{ op_prefix }}/common/S3_SECRET
+
+    # mysql-secret — single shared app user
+    DB_HOST=mysql:3306
+    DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
+    DB_USER={{ op_prefix }}/mysql/MYSQL_USER
+    DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
+
+    REDIS_CONNECTION=redis:6379
     ```
-    `{{ op_prefix }}` is a Jinja variable set to `op://cash-track-prod` in `group_vars/all/main.yml`.
+
+    `{{ op_prefix }}` is a Jinja variable set to `op://cash-track-prod` in `group_vars/all/main.yml`. Compare against `infra/services/api/deployment.yml` to confirm the env var **names** (the API binds K8s `MYSQL_USER` to the app env var `DB_USER`; the same remap happens here in the template).
 15. **Write `env.tpl`** — the top-level `.env`:
     ```ini
     DOMAIN=cash-track.app
@@ -448,7 +521,8 @@ No operator action. Proceed to Stage 4.
     VERSION_MYSQL={{ versions.mysql }}
     VERSION_MYSQL_BACKUP={{ versions.mysql_backup }}
     VERSION_REDIS={{ versions.redis }}
-    VERSION_TG_BOT={{ versions.tg_bot }}
+    VERSION_CRASHERS_BOT={{ versions.crashers_bot }}
+    VERSION_HOME_EXPORTER={{ versions.home_exporter }}
     ```
     This file has no secrets — it's git-committed as a template but rendered on disk by Ansible.
 
@@ -488,16 +562,29 @@ No operator action. Proceed to Stage 5.
 
 ### Action items
 
-1. **Write `mysql-init/vars/databases.yml`:**
+1. **Write `mysql-init/vars/databases.yml`** — single shared app user, multiple databases (matches K8s reality; per-app users deferred):
    ```yaml
+   app_user:
+     user_op_ref:     "op://cash-track-prod/mysql/MYSQL_USER"
+     password_op_ref: "op://cash-track-prod/mysql/MYSQL_PASSWORD"
    databases:
-     - { name: cashtrack,      user: cashtrack_app, password_op_ref: "op://cash-track-prod/mysql-app-users/CASHTRACK_APP_PASSWORD" }
-     - { name: telegram_bots,  user: tg_bot_app,    password_op_ref: "op://cash-track-prod/mysql-app-users/TG_BOT_APP_PASSWORD" }
+     - cashtrack
+     - telegram_bots
    ```
-2. **Write `mysql-init/tasks/main.yml`:** uses `community.mysql.mysql_db` and `community.mysql.mysql_user`, running against the mysql container via `delegate_to: "{{ inventory_hostname }}"` + `ansible_python_interpreter` switch. Requires `MYSQL_ROOT_PASSWORD` in the environment (rendered into a temp file in `compose-render`). Each database + user is created idempotently with grants scoped to its own database. Resolve passwords via `op read` in a `delegate_to: localhost` pre-task, pass into mysql tasks via `no_log: true`.
+2. **Write `mysql-init/tasks/main.yml`:** uses `community.mysql.mysql_db` and `community.mysql.mysql_user`, running against the mysql container via `delegate_to: "{{ inventory_hostname }}"` + `ansible_python_interpreter` switch. Requires `MYSQL_ROOT_PASSWORD` in the environment (rendered into a temp file in `compose-render`). Resolve `app_user` user/password via `op read` in a `delegate_to: localhost` pre-task with `no_log: true`. For each `databases[*]`: create the database idempotently and grant the resolved app user `ALL PRIVILEGES` on `<db>.*`. Adding a new application = add its DB name to the list and re-run; no new vault item, no new user.
 3. **Write `compose-render/defaults/main.yml`:**
    ```yaml
-   secret_files: [ api, gateway, mysql, mysql-backup, mysql-exporter, alertmanager, grafana, telegram ]
+   secret_files:
+     - api
+     - gateway
+     - website
+     - mysql
+     - mysql-backup
+     - mysql-exporter
+     - alertmanager
+     - grafana
+     - crashers-bot
+     - home-exporter
    op_prefix: "op://cash-track-prod"
    render_dir: /tmp/cashtrack-render
    droplet_project_dir: /opt/cashtrack
@@ -747,7 +834,7 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
    cd infra && ansible-playbook ansible/ops/backup-restore.yml -e backup_id=<id>
    ```
    - The playbook pulls the dump from `cash-track-backups`, loads into the `cashtrack` database.
-   - Application user `cashtrack_app` is granted post-restore (if restore drops and recreates grants, re-run mysql-init role: `make bootstrap -e ansible_tags=mysql`).
+   - The shared app user (`mysql.MYSQL_USER`) is granted post-restore (if restore drops and recreates grants, re-run mysql-init role: `make bootstrap -e ansible_tags=mysql`).
 3. **Restart dependent services** to pick up restored data:
    ```bash
    tailscale ssh ops@cashtrack-prod-0 'cd /opt/cashtrack && docker compose restart api gateway'
@@ -773,7 +860,7 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
 
 ### If any fails
 
-- api 500 → `docker compose logs api` → check DB password, CAPTCHA secret, etc. A common failure: the restore dump re-created the `cashtrack_app` user with the old password; force the vault password by running `make bootstrap --tags mysql` after restore.
+- api 500 → `docker compose logs api` → check DB password, CAPTCHA secret, etc. A common failure: the restore dump re-created the shared app user with the old password; force the vault password by running `make bootstrap --tags mysql` after restore.
 - gateway 502 upstream → `docker compose logs gateway` → API container health; check `compose.app.yml` Traefik labels spelled the service name right (`api.cashtrack-app` network name).
 - frontend 404 on `/healthcheck` → frontend image serves static assets, not a healthcheck; adjust smoke test to `GET /` and assert HTTP 200 + known body substring.
 
@@ -819,64 +906,88 @@ Tell operator: *"Stage 9 committed. Please run `make deploy` to pick up the new 
 
 ---
 
-## Stage 10 — Telegram Bot Stack + Ofelia Schedules [CLAUDE CODE]
+## Stage 10 — Telegram Bots + Ofelia Schedules [CLAUDE CODE]
 
-**Goal:** Fill in `compose.telegram.yml` with the tg-bot service + its Ofelia schedules.
+**Goal:** Fill in `compose.telegram.yml` with the two telegram-namespace apps — `crashers-bot` and `home-exporter` — plus any Ofelia schedules they need.
+
+**Why two services, not one:** the existing DOKS cluster runs them as separate deployments under the `telegram-bots` namespace with separate K8s secrets. Mirroring that 1:1 in compose keeps audit logs and image releases per-app. (`home-exporter`'s exact role — Telegram bot vs Prometheus-style exporter — needs to be confirmed against the deployment YAML at task start.)
 
 **Files:**
 - Modify: `./infra/compose/compose.telegram.yml`
-- Create: `./infra/ansible/roles/compose-render/templates/telegram.env.tpl` (already stubbed in Stage 4 — fill with the tg-bot app's full env surface based on the existing K8s deployment)
+- Modify: `./infra/ansible/roles/compose-render/templates/crashers-bot.env.tpl` (stubbed in Stage 4 — fill with the actual env surface)
+- Modify: `./infra/ansible/roles/compose-render/templates/home-exporter.env.tpl` (same)
 
 ### Action items
 
-1. **Inspect the existing K8s `telegram-bots` namespace manifest** to enumerate env vars: `kubectl -n telegram-bots get deploy telegram-bot -o yaml | yq '.spec.template.spec.containers[0].env'`. Claude Code reads this from `./infra/services/telegram-bot/` if it exists; otherwise operator pastes the output.
-2. **Write `compose.telegram.yml`** — full `tg-bot` service per design §9:
+1. **Inspect the existing K8s deployments** to enumerate images, env vars, and any volume / port surface:
+   ```bash
+   kubectl -n telegram-bots get deploy crashers-bot   -o yaml > /tmp/crashers-bot.k8s.yaml
+   kubectl -n telegram-bots get deploy home-exporter  -o yaml > /tmp/home-exporter.k8s.yaml
+   kubectl -n telegram-bots get secret crashers-bot-secret  -o jsonpath='{.data}' | jq 'keys'
+   kubectl -n telegram-bots get secret home-exporter-secret -o jsonpath='{.data}' | jq 'keys'
+   ```
+   Operator pastes the output into the session if the manifests don't live under `./infra/services/`.
+2. **Write `compose.telegram.yml`** — both services on the shared `app` network:
    ```yaml
    services:
-     tg-bot:
-       image: cashtrack/telegram-bot:${VERSION_TG_BOT}
+     crashers-bot:
+       image: cashtrack/crashers-bot:${VERSION_CRASHERS_BOT}
        restart: unless-stopped
        networks: [app]
-       env_file: [secrets/telegram.env]
+       env_file: [secrets/crashers-bot.env]
        depends_on:
          mysql: { condition: service_healthy }
        labels:
          - ofelia.enabled=true
-         - ofelia.job-exec.daily-digest.schedule=0 0 8 * * *
-         - ofelia.job-exec.daily-digest.command=php app.php bot:digest
-         - ofelia.job-exec.cleanup.schedule=0 30 3 * * *
-         - ofelia.job-exec.cleanup.command=php app.php bot:cleanup
-         - ofelia.job-exec.reminders.schedule=@every 15m
-         - ofelia.job-exec.reminders.command=php app.php bot:reminders
-       mem_limit: 640m
-       mem_reservation: 512m
-       oom_score_adj: -100
+         # Add ofelia.job-exec.<name>.schedule / .command labels per the
+         # CronJob / scheduled task list from the K8s deployment.
+       mem_limit: 256m
+       mem_reservation: 128m
+
+     home-exporter:
+       image: cashtrack/home-exporter:${VERSION_HOME_EXPORTER}
+       restart: unless-stopped
+       networks: [app]
+       env_file: [secrets/home-exporter.env]
+       depends_on:
+         mysql: { condition: service_healthy }
+       # If home-exporter exposes /metrics, add Prometheus scrape labels and
+       # a corresponding scrape job in compose/config/prometheus/prometheus.yml.
+       mem_limit: 128m
+       mem_reservation: 64m
    ```
-3. **Fill `telegram.env.tpl`** with all env vars:
+   Set `mem_limit` per the K8s `resources.limits.memory` of each deployment; the values above are placeholders.
+
+3. **Fill `crashers-bot.env.tpl`** — every K8s env var, secrets sourced from the right vault:
    ```ini
-   BOT_TOKEN={{ op_prefix }}/telegram-bot/BOT_TOKEN
-   WEBHOOK_SECRET={{ op_prefix }}/telegram-bot/WEBHOOK_SECRET
-   DB_HOST=mysql
+   # crashers-bot vault — fields confirmed at Stage 0 from crashers-bot-secret
+   BOT_TOKEN={{ op_prefix }}/crashers-bot/BOT_TOKEN
+   # ...other crashers-bot-specific keys, one line per K8s secret data key
+
+   # mysql vault — shared cashtrack app user
+   DB_HOST=mysql:3306
    DB_NAME=telegram_bots
-   DB_USER=tg_bot_app
-   DB_PASSWORD={{ op_prefix }}/mysql-app-users/TG_BOT_APP_PASSWORD
-   # ... any bot-specific env from the K8s deploy
+   DB_USER={{ op_prefix }}/mysql/MYSQL_USER
+   DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
    ```
+4. **Fill `home-exporter.env.tpl`** — same shape, sourcing secrets from the `home-exporter` vault. If home-exporter doesn't touch MySQL, drop the `DB_*` block.
+5. **Update `group_vars/all/main.yml`** — add `versions.crashers_bot` and `versions.home_exporter` to the versions map (and reflect them as `VERSION_CRASHERS_BOT` / `VERSION_HOME_EXPORTER` in `env.tpl`). Drop any prior `versions.tg_bot` / `VERSION_TG_BOT` reference.
 
 ### Verification checklist
 
-- [ ] `docker compose -f ... -f compose.telegram.yml config` validates.
-- [ ] After deploy, `docker compose logs tg-bot` shows successful Telegram API connection.
-- [ ] `docker compose logs ofelia | grep daily-digest` shows the job registered.
-- [ ] Manual trigger: `docker compose exec tg-bot php app.php bot:reminders` completes without error.
+- [ ] `docker compose -f compose.core.yml -f compose.telegram.yml config` validates with `VERSION_CRASHERS_BOT` and `VERSION_HOME_EXPORTER` set.
+- [ ] After deploy, `docker compose logs crashers-bot` shows the bot connecting to Telegram (or the equivalent app-level success line).
+- [ ] If home-exporter exposes metrics, `curl http://home-exporter:<port>/metrics` from another container returns Prometheus-format output and the new scrape job in Prometheus shows it `UP`.
+- [ ] Any Ofelia jobs registered for crashers-bot appear in `docker compose logs ofelia`.
+- [ ] No reference to `tg-bot`, `telegram-bot`, `mysql-app-users`, `TG_BOT_APP_PASSWORD`, or `VERSION_TG_BOT` remains anywhere in `./infra/`.
 
 ### Commit
 
-`feat(infra/telegram): add tg-bot service with ofelia schedules`
+`feat(infra/telegram): add crashers-bot and home-exporter services`
 
 ### Handoff
 
-Tell operator: *"Stage 10 committed. `make deploy` to bring up tg-bot, then verify per checklist."*
+Tell operator: *"Stage 10 committed. `make deploy` to bring up crashers-bot + home-exporter, then verify per checklist."*
 
 ---
 
@@ -930,7 +1041,7 @@ Tell operator: *"Stage 11 committed. Please create the GitHub repo if not alread
 
 **Goal:** Point each service repo's release workflow at the new org reusable `ship-service.yml`. Retire per-repo K8s deploy plumbing.
 
-**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`, `cash-track/telegram-bot` (or wherever the tg-bot lives).
+**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`, `cash-track/crashers-bot`, `cash-track/home-exporter` (confirm the actual repo names at task start — they may live under a different org or have prefixes).
 
 ### Action items
 
