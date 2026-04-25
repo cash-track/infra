@@ -205,12 +205,12 @@ Post a message to Claude Code: *"Stage 0 complete. Vault populated, Service Acco
 
 ### Verification checklist
 
-- [ ] `cd infra && terraform -chdir=terraform fmt -check` passes (Claude runs `terraform fmt` on all `.tf` files).
-- [ ] `terraform -chdir=terraform validate` passes (after operator supplies `backend.hcl` — Claude can run `terraform init -backend=false && terraform validate` to skip backend init).
-- [ ] `grep -r 'TODO\|FIXME\|PLACEHOLDER' terraform/` returns nothing.
-- [ ] `grep -rE '(access|secret)_key|password|token' terraform/ | grep -v variable.tf` returns nothing except variable declarations.
-- [ ] `git status` clean after commit.
-- [ ] The new `README.md` does not reference "migration" anywhere (per design §3).
+- [ ] `cd infra && terraform -chdir=terraform fmt -check` passes (Claude runs `terraform fmt` on all `.tf` files). *Deferred — neither terraform nor opentofu installed on the operator laptop; covered implicitly by Stage 2's `terraform plan`.*
+- [ ] `terraform -chdir=terraform validate` passes (after operator supplies `backend.hcl` — Claude can run `terraform init -backend=false && terraform validate` to skip backend init). *Deferred — same reason; Stage 2 catches it.*
+- [x] `grep -r 'TODO\|FIXME\|PLACEHOLDER' terraform/` returns nothing.
+- [x] `grep -rE '(access|secret)_key|password|token' terraform/ | grep -v variable.tf` returns nothing except variable declarations.
+- [x] `git status` clean after commit.
+- [x] The new `README.md` does not reference "migration" anywhere (per design §3).
 
 ### Commits
 
