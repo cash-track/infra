@@ -1,0 +1,16 @@
+---
+- name: Cash-Track production droplet bootstrap
+  hosts: prod
+  become: true
+  serial: 1
+  pre_tasks:
+    - name: Wait for cloud-init sentinel
+      ansible.builtin.wait_for:
+        path: /var/lib/bootstrap-ready
+        timeout: 300
+  roles:
+    - { role: base, tags: [base] }
+    - { role: docker, tags: [docker] }
+    - { role: tailscale, tags: [tailscale] }
+    - { role: volume, tags: [volume] }
+    # Stages 4–5 add: firewall-refresh, mysql-init, compose-render, compose-up.

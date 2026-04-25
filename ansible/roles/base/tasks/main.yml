@@ -1,0 +1,127 @@
+---
+- name: Set timezone to UTC
+  community.general.timezone:
+    name: Etc/UTC
+
+- name: Install OS packages
+  ansible.builtin.apt:
+    name:
+      - chrony
+      - unattended-upgrades
+      - needrestart
+      - curl
+      - jq
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Enable and start chrony
+  ansible.builtin.systemd:
+    name: chrony
+    enabled: true
+    state: started
+
+# --- Swap ---------------------------------------------------------------
+- name: Check whether /swapfile exists
+  ansible.builtin.stat:
+    path: /swapfile
+  register: base_swapfile_stat
+
+- name: Allocate /swapfile (1 GiB) on root disk
+  ansible.builtin.command: fallocate -l 1G /swapfile
+  args:
+    creates: /swapfile
+  when: not base_swapfile_stat.stat.exists
+
+- name: Lock down /swapfile permissions
+  ansible.builtin.file:
+    path: /swapfile
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Format swap area
+  ansible.builtin.command: mkswap /swapfile
+  register: base_mkswap_result
+  changed_when: "'Setting up swapspace' in base_mkswap_result.stdout"
+  failed_when: base_mkswap_result.rc != 0 and 'already' not in base_mkswap_result.stderr
+  when: not base_swapfile_stat.stat.exists
+
+- name: Enable swap
+  ansible.builtin.command: swapon /swapfile
+  register: base_swapon_result
+  changed_when: base_swapon_result.rc == 0
+  failed_when: base_swapon_result.rc != 0 and 'already' not in (base_swapon_result.stderr | default(''))
+  when: not base_swapfile_stat.stat.exists
+
+- name: Persist swap entry in /etc/fstab
+  ansible.posix.mount:
+    name: none
+    src: /swapfile
+    fstype: swap
+    opts: sw
+    state: present
+
+# --- Sysctls ------------------------------------------------------------
+- name: Drop sysctl tuning
+  ansible.builtin.copy:
+    src: sysctl-99-cashtrack.conf
+    dest: /etc/sysctl.d/99-cashtrack.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload sysctl
+
+# --- Unattended upgrades + needrestart ---------------------------------
+- name: Drop maintenance-window reboot policy for unattended-upgrades
+  ansible.builtin.template:
+    src: 52unattended-upgrades-reboot.j2
+    dest: /etc/apt/apt.conf.d/52unattended-upgrades-reboot
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure needrestart to auto-restart services
+  ansible.builtin.copy:
+    src: needrestart.conf
+    dest: /etc/needrestart/needrestart.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable unattended-upgrades timer
+  ansible.builtin.systemd:
+    name: unattended-upgrades
+    enabled: true
+    state: started
+
+# --- Post-reboot smoke check ------------------------------------------
+- name: Install post-reboot smoke check script
+  ansible.builtin.copy:
+    src: postreboot-smoke.sh
+    dest: /usr/local/sbin/postreboot-smoke.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install post-reboot smoke check systemd unit
+  ansible.builtin.copy:
+    src: postreboot-smoke.service
+    dest: /etc/systemd/system/postreboot-smoke.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd
+
+- name: Ensure node_exporter textfile collector dir exists
+  ansible.builtin.file:
+    path: /var/lib/node_exporter/textfile_collector
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Enable post-reboot smoke check
+  ansible.builtin.systemd:
+    name: postreboot-smoke.service
+    enabled: true

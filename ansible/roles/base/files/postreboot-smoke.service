@@ -1,0 +1,14 @@
+[Unit]
+Description=Cash-Track post-reboot smoke check
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/usr/local/sbin/postreboot-smoke.sh
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/postreboot-smoke.sh
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

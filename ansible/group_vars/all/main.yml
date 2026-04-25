@@ -1,0 +1,58 @@
+---
+# Image tags used verbatim — passed straight to `docker pull`. No `v`-stripping,
+# no normalisation. If a release is published as `v1.2.9`, that exact string is
+# the tag both in `.env` and in `docker pull cashtrack/api:v1.2.9`.
+versions:
+  api:           "1.2.9"
+  gateway:       "1.2.9"
+  frontend:      "1.1.4"
+  website:       "0.1.14"
+  mysql:         "1.0.8"
+  mysql_backup:  "0.0.5"
+  redis:         "1.0.1"
+  crashers_bot:  "1.0.0"
+  home_exporter: "1.0.0"
+
+retention:
+  prometheus: "7d"
+  loki:       "168h"
+  tempo:      "72h"
+
+backups:
+  spaces_endpoint: "ams3.digitaloceanspaces.com"
+  spaces_bucket:   "cash-track-backups"
+  schedule_cron:   "0 0 3 * * *"
+
+# Compose files rendered/used by the compose-* roles (paths under /opt/cashtrack).
+# Stage 4 fills these out; Stage 5 wires them into compose-up.
+compose_files:
+  - compose.core.yml
+  - compose.app.yml
+  - compose.obs.yml
+  - compose.telegram.yml
+
+# Per-service env files rendered by compose-render (Stage 5) into /opt/cashtrack/secrets/.
+secret_files:
+  - api.env
+  - gateway.env
+  - mysql.env
+  - mysql-backup.env
+  - mysql-exporter.env
+  - alertmanager.env
+  - grafana.env
+  - crashers-bot.env
+  - home-exporter.env
+
+# Service set currently expected to be running on the droplet. Stage 3 leaves this
+# empty — roles guard optional behaviour (e.g. `tailscale serve` for grafana) on
+# membership in this list.
+compose_services: []
+
+# Volume subdir → owner UID. Matches upstream image runtime users.
+volume_subdir_owners:
+  mysql: 999
+  prometheus: 65534
+  loki: 10001
+  tempo: 10001
+  grafana: 472
+  alertmanager: 65534

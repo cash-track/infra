@@ -1,0 +1,30 @@
+---
+# Tailscale itself is installed and brought up by cloud-init. This role only
+# verifies the daemon is healthy and (later, when grafana is in
+# `compose_services`) publishes grafana over `tailscale serve`.
+- name: Read tailscale status
+  ansible.builtin.command: tailscale status --json
+  register: tailscale_status
+  changed_when: false
+
+- name: Parse tailscale backend state
+  ansible.builtin.set_fact:
+    tailscale_backend_state: "{{ (tailscale_status.stdout | from_json).BackendState }}"
+
+- name: Assert tailscale is Running
+  ansible.builtin.assert:
+    that:
+      - tailscale_backend_state == "Running"
+    fail_msg: >-
+      Tailscale backend is in state '{{ tailscale_backend_state }}', expected 'Running'.
+      Re-run cloud-init or `tailscale up` on the droplet.
+
+# `tailscale serve` exposes grafana on the tailnet (HTTPS via tailnet cert).
+# Guarded so Stage 3 (no compose stack yet) is a no-op; flips on once Stage 4+
+# add `grafana` to `compose_services`.
+- name: Publish grafana via tailscale serve
+  ansible.builtin.command: tailscale serve --bg --https=443 http://localhost:3000
+  register: tailscale_serve
+  changed_when: tailscale_serve.rc == 0
+  failed_when: tailscale_serve.rc != 0 and 'already' not in (tailscale_serve.stderr | default(''))
+  when: "'grafana' in compose_services"

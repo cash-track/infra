@@ -1,0 +1,49 @@
+---
+- name: Gather mount facts
+  ansible.builtin.setup:
+    gather_subset:
+      - "!all"
+      - "!min"
+      - mounts
+
+- name: Locate /mnt/data mount
+  ansible.builtin.set_fact:
+    volume_data_mount: "{{ ansible_mounts | selectattr('mount', 'equalto', '/mnt/data') | list | first | default({}) }}"
+
+- name: Assert /mnt/data is mounted
+  ansible.builtin.assert:
+    that:
+      - volume_data_mount | length > 0
+    fail_msg: "/mnt/data is not mounted — cloud-init Block Volume mount step did not run or failed."
+
+- name: Read filesystem label of /mnt/data device
+  ansible.builtin.command: blkid -s LABEL -o value {{ volume_data_mount.device }}
+  register: volume_data_label
+  changed_when: false
+
+- name: Assert /mnt/data device carries the cashtrack-data label
+  ansible.builtin.assert:
+    that:
+      - volume_data_label.stdout == "cashtrack-data"
+    fail_msg: >-
+      Device {{ volume_data_mount.device }} mounted at /mnt/data has label
+      '{{ volume_data_label.stdout }}', expected 'cashtrack-data'. Refusing to proceed
+      to avoid writing to the wrong volume.
+
+- name: Assert /mnt/data mount options include noatime,nodiratime
+  ansible.builtin.assert:
+    that:
+      - "'noatime' in volume_data_mount.options"
+      - "'nodiratime' in volume_data_mount.options"
+    fail_msg: "/mnt/data is missing required mount options noatime,nodiratime (got: {{ volume_data_mount.options }})."
+
+- name: Create per-service data subdirectories
+  ansible.builtin.file:
+    path: "/mnt/data/{{ item.key }}"
+    state: directory
+    owner: "{{ item.value }}"
+    group: "{{ item.value }}"
+    mode: "0755"
+  loop: "{{ volume_subdir_owners | dict2items }}"
+  loop_control:
+    label: "{{ item.key }} (uid={{ item.value }})"

@@ -276,10 +276,10 @@ Tell operator: *"Stage 1 committed. Ready for Stage 2: please run `terraform ini
 
 ### Verification checklist
 
-- [ ] `terraform init` completes without error; remote state file exists in `cash-track-tfstate/prod/terraform.tfstate`.
-- [ ] `terraform plan` shows only *Plan: 7 to add, 0 to change, 0 to destroy.* (exact count depends on module structure).
-- [ ] Nothing in the plan references a secret by value (`terraform plan` output in DO provider should show `(sensitive)` for the Tailscale authkey).
-- [ ] `backend.hcl` is `.gitignore`'d: `git status --ignored | grep backend.hcl` shows it as ignored.
+- [x] `terraform init` completes without error; remote state file exists in `cash-track-tfstate/prod/terraform.tfstate`.
+- [x] `terraform plan` shows only *Plan: 7 to add, 0 to change, 0 to destroy.* (exact count depends on module structure).
+- [x] Nothing in the plan references a secret by value (`terraform plan` output in DO provider should show `(sensitive)` for the Tailscale authkey).
+- [x] `backend.hcl` is `.gitignore`'d: `git status --ignored | grep backend.hcl` shows it as ignored.
 
 ### Signal "done"
 
@@ -374,10 +374,10 @@ Operator confirms: *"Stage 2 done. Plan output looks right, 7 additions, no dest
 
 ### Verification checklist
 
-- [ ] `ansible-playbook site.yml --syntax-check` passes (Claude runs this locally after `ansible-galaxy install -r requirements.yml`).
-- [ ] `ansible-lint ansible/` produces no errors (warnings ok).
-- [ ] `inventory/prod/terraform.sh` is executable and returns valid JSON when Terraform outputs are mocked (test with `TF_OUTPUT=$(cat fixtures/tf-output.json) ./terraform.sh`).
-- [ ] No role references `op://` yet (secrets come in Stage 5).
+- [x] `ansible-playbook site.yml --syntax-check` passes (Claude runs this locally after `ansible-galaxy install -r requirements.yml`).
+- [x] `ansible-lint ansible/` produces no errors (warnings ok).
+- [x] `inventory/prod/terraform.sh` is executable and returns valid JSON when Terraform outputs are mocked (test with `TF_OUTPUT=$(cat fixtures/tf-output.json) ./terraform.sh`).
+- [x] No role references `op://` yet (secrets come in Stage 5).
 
 ### Commit
 

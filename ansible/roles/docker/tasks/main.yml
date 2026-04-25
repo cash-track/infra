@@ -1,0 +1,32 @@
+---
+# Docker engine itself is installed by cloud-init. This role configures the
+# daemon: log rotation caps so a chatty container can't fill the root disk.
+- name: Ensure /etc/docker exists
+  ansible.builtin.file:
+    path: /etc/docker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Render /etc/docker/daemon.json
+  ansible.builtin.copy:
+    dest: /etc/docker/daemon.json
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {
+        "log-driver": "json-file",
+        "log-opts": {
+          "max-size": "10m",
+          "max-file": "3"
+        }
+      }
+  notify: Restart docker
+
+- name: Ensure docker is enabled and running
+  ansible.builtin.systemd:
+    name: docker
+    enabled: true
+    state: started
