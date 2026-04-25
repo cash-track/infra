@@ -847,7 +847,9 @@ cash-track-prod/
 ├── grafana                  fields: ADMIN_PASSWORD, SMTP_PASSWORD
 ├── crashers-bot             fields: per crashers-bot-secret (BOT_TOKEN, ...)
 ├── home-exporter            fields: per home-exporter-secret
-├── cloudflare-origin-cert   attachment: cf-origin-cert.pem (PEM bundle)
+├── cloudflare-origin-cert   attachments: origin-cert.pem, origin-key.pem
+│                            (two files; CF only shows the private key once at
+│                             creation, so save both textboxes from the dashboard)
 ├── tailscale                fields: OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
 ├── dockerhub                fields: USERNAME, TOKEN
 ├── do-api                   fields: TOKEN (for firewall-refresh playbook + doctl)

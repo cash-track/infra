@@ -100,7 +100,7 @@
    | `grafana`                  | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana if migrating; else generate | grafana |
    | + `crashers-bot`           | TBD — populate by inspecting `kubectl -n telegram-bots get secret crashers-bot-secret`; expected: `BOT_TOKEN`, plus any app-specific keys | `telegram-bots/crashers-bot-secret` | crashers-bot |
    | + `home-exporter`          | TBD — populate by inspecting `kubectl -n telegram-bots get secret home-exporter-secret` | `telegram-bots/home-exporter-secret` | home-exporter |
-   | + `cloudflare-origin-cert` | `cf-origin-cert.pem` (file attachment, contains both cert + key) | Cloudflare dashboard → SSL/TLS → Origin Server | traefik |
+   | + `cloudflare-origin-cert` | Two file attachments: `origin-cert.pem`, `origin-key.pem` | Cloudflare dashboard → SSL/TLS → Origin Server (save both the certificate textbox and the private-key textbox at creation time — Cloudflare does not retain the key) | traefik |
    | + `tailscale`              | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` (tags `tag:prod-server,tag:ci`) | Tailscale admin → OAuth clients | terraform (cloud-init authkey mint) |
    | + `dockerhub`              | `USERNAME`, `TOKEN` | Docker Hub PAT, scope `read+write` on `cashtrack/*` | CI |
    | + `do-api`                 | `TOKEN` | DO dashboard PAT (scope `droplet:*, reserved_ip:*, volume:*, firewall:*, load_balancer:*, ssh_key:*, spaces:*, domain:*`) | terraform, firewall-refresh |
@@ -604,7 +604,7 @@ No operator action. Proceed to Stage 5.
    - Run `op inject -i ... -o ...` via `ansible.builtin.command`, `delegate_to: localhost`, `environment: OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"`, `no_log: true`
    - `ansible.builtin.copy` the rendered `.env` to `/opt/cashtrack/secrets/<name>.env`, `mode: 0600`, `owner: ops`, `notify: "restart {{ item }}"`, `no_log: true`
    - Wipe `/tmp/cashtrack-render/` at the end
-   Also render `env.tpl` → `.env` on the droplet (no `op inject` — no secrets in it). Also render Traefik cert attachments: `op document get "cloudflare-origin-cert" --vault cash-track-prod --output /tmp/.../origin-cert.pem` (or field-based if stored as text), then copy to `/opt/cashtrack/config/traefik/origin-{cert,key}.pem` with `mode: 0600`. Also render `alertmanager.yml` and any other per-service config files that reference rendered environment values.
+   Also render `env.tpl` → `.env` on the droplet (no `op inject` — no secrets in it). Also fetch the Traefik cert pair: `op read "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"` and `op read "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"` (two separate file attachments on the same item), copy each to `/opt/cashtrack/config/traefik/origin-{cert,key}.pem` with `mode: 0600`, owner root. Also render `alertmanager.yml` and any other per-service config files that reference rendered environment values.
 
    **Critical:** `no_log: true` on every task that handles a rendered file. Ansible verbose output should never leak a secret.
 
