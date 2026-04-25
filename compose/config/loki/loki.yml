@@ -1,0 +1,65 @@
+# Single-binary Loki config; tuned for the 5 GB disk slice and 7-day retention
+# called out in design §5 / §15.
+
+target: all
+auth_enabled: false
+
+server:
+  http_listen_port: 3100
+  grpc_listen_port: 9096
+  log_level: info
+
+common:
+  instance_addr: 127.0.0.1
+  path_prefix: /loki
+  storage:
+    filesystem:
+      chunks_directory: /loki/chunks
+      rules_directory: /loki/rules
+  replication_factor: 1
+  ring:
+    kvstore:
+      store: inmemory
+
+schema_config:
+  configs:
+    - from: 2024-01-01
+      store: tsdb
+      object_store: filesystem
+      schema: v13
+      index:
+        prefix: index_
+        period: 24h
+
+# Hard ingestion + retention caps. A log-verbose deploy drops at ingest rather
+# than silently filling the volume.
+limits_config:
+  retention_period: 168h
+  ingestion_rate_mb: 2
+  ingestion_burst_size_mb: 4
+  reject_old_samples: true
+  reject_old_samples_max_age: 168h
+  max_streams_per_user: 5000
+  per_stream_rate_limit: 2MB
+  per_stream_rate_limit_burst: 4MB
+
+compactor:
+  working_directory: /loki/compactor
+  compaction_interval: 10m
+  retention_enabled: true
+  retention_delete_delay: 2h
+  retention_delete_worker_count: 50
+  delete_request_store: filesystem
+
+query_range:
+  results_cache:
+    cache:
+      embedded_cache:
+        enabled: true
+        max_size_mb: 100
+
+ruler:
+  alertmanager_url: http://alertmanager:9093
+
+analytics:
+  reporting_enabled: false

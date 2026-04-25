@@ -1,0 +1,86 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    cluster: cashtrack-prod
+    droplet: ct-prod
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+rule_files:
+  - /etc/prometheus/rules/*.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: traefik
+    static_configs:
+      - targets: ["traefik:8080"]
+
+  # node-exporter runs in `network_mode: host`, so from the prometheus container
+  # we reach it via the docker host gateway (added per `extra_hosts` on the
+  # prometheus service ... but compose v3 lacks per-target host aliases here).
+  # Use `host.docker.internal` — the prom service must declare
+  # `extra_hosts: ["host.docker.internal:host-gateway"]` on Linux. Wired in
+  # compose.obs.yml via the host-network model: the host's loopback is reachable
+  # by name `host.docker.internal` only after the extra_hosts entry. Keep this
+  # aligned with the prometheus service definition if it changes.
+  - job_name: node-exporter
+    static_configs:
+      - targets: ["host.docker.internal:9100"]
+
+  - job_name: mysql-exporter
+    static_configs:
+      - targets: ["mysql-exporter:9104"]
+
+  - job_name: ofelia
+    static_configs:
+      - targets: ["ofelia:8081"]
+
+  # Spiral exposes its OTEL/Prometheus metrics on container port 2112 (matches
+  # the K8s `name: prometheus` port on infra/services/api/service.yml).
+  - job_name: api
+    static_configs:
+      - targets: ["api:2112"]
+
+  # Gateway metrics live on the main HTTP listener (`prom.NewPrometheus(...)
+  # .WrapHandler` in main.go). GATEWAY_ADDRESS is :8081 in the rendered env.
+  - job_name: gateway
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["gateway:8081"]
+
+  - job_name: loki
+    static_configs:
+      - targets: ["loki:3100"]
+
+  - job_name: tempo
+    static_configs:
+      - targets: ["tempo:3200"]
+
+  - job_name: alertmanager
+    static_configs:
+      - targets: ["alertmanager:9093"]
+
+  # promtail self-metrics
+  - job_name: promtail
+    static_configs:
+      - targets: ["promtail:9080"]
+
+  # grafana self-metrics (anonymous internal endpoint)
+  - job_name: grafana
+    static_configs:
+      - targets: ["grafana:3000"]
+
+  # Services intentionally NOT scraped:
+  # - mysql:        scraped indirectly via mysql-exporter (no direct exporter)
+  # - redis:        no exporter shipped (acceptable; Redis is treated as ephemeral)
+  # - frontend:     static SPA, no metrics endpoint
+  # - website:      Nuxt SSR, no /metrics endpoint
+  # - mysql-backup: status surfaced via node-exporter textfile collector
+  #                 (`mysql_backup_last_success_timestamp_seconds`)

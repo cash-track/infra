@@ -1,0 +1,16 @@
+apiVersion: 1
+
+# Dashboard JSONs land in /var/lib/grafana-dashboards (mounted from
+# ./config/grafana/provisioning/dashboards/json/ via compose.obs.yml).
+# Stage 9 lays down the actual JSONs; this provider config exists in Stage 4
+# so the directory wires through cleanly when those files arrive.
+
+providers:
+  - name: dashboards
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 60
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana-dashboards
+      foldersFromFilesStructure: true

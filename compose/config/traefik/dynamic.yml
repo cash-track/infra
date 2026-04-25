@@ -1,0 +1,29 @@
+# Static config consumed by the file provider. Cert PEMs are rendered onto the
+# droplet by the compose-render Ansible role from the 1Password
+# `cloudflare-origin-cert` document; this file references them by absolute path.
+#
+# `cloudflare-only.ipAllowList.sourceRange` is rewritten by the
+# ops/firewall-refresh-cf.yml playbook on a weekly cadence (and on demand). The
+# placeholder list below is intentional — the playbook substitutes the live CF
+# IP feeds. Without rewriting, all routers carrying the middleware reject traffic.
+
+tls:
+  certificates:
+    - certFile: /etc/traefik/origin-cert.pem
+      keyFile: /etc/traefik/origin-key.pem
+
+http:
+  middlewares:
+    retry:
+      retry:
+        attempts: 3
+        initialInterval: 100ms
+
+    cloudflare-only:
+      ipAllowList:
+        # Rewritten by ops/firewall-refresh-cf.yml from
+        # https://www.cloudflare.com/ips-v4 + ips-v6.
+        sourceRange:
+          - 0.0.0.0/0
+        ipStrategy:
+          depth: 1

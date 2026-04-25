@@ -1,0 +1,122 @@
+name: cashtrack
+
+# Application stack. Reads the `cashtrack-app` network created by compose.core.yml.
+
+networks:
+  app:
+    driver: bridge
+    name: cashtrack-app
+
+services:
+  api:
+    image: cashtrack/api:${VERSION_API}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [.env, secrets/api.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/healthcheck"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.api.rule=Host(`api.${DOMAIN}`)
+      - traefik.http.routers.api.entrypoints=websecure
+      - traefik.http.routers.api.tls=true
+      - traefik.http.services.api.loadbalancer.server.port=8080
+      - traefik.http.routers.api.middlewares=retry@file,cloudflare-only@file
+    mem_limit: 768m
+    mem_reservation: 640m
+    oom_score_adj: -200
+
+  gateway:
+    image: cashtrack/gateway:${VERSION_GATEWAY}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [.env, secrets/gateway.env]
+    depends_on:
+      redis: { condition: service_started }
+      api: { condition: service_started }
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.gateway.rule=Host(`gateway.${DOMAIN}`)
+      - traefik.http.routers.gateway.entrypoints=websecure
+      - traefik.http.routers.gateway.tls=true
+      - traefik.http.services.gateway.loadbalancer.server.port=8081
+      - traefik.http.routers.gateway.middlewares=retry@file,cloudflare-only@file
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: -200
+
+  frontend:
+    image: cashtrack/frontend:${VERSION_FRONTEND}
+    restart: unless-stopped
+    networks: [app]
+    # The image's entrypoint substitutes VUE_APP_* into the served bundle /
+    # nginx config at start (matches infra/services/frontend/deployment.yml).
+    env_file: [secrets/frontend.env]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.frontend.rule=Host(`my.${DOMAIN}`)
+      - traefik.http.routers.frontend.entrypoints=websecure
+      - traefik.http.routers.frontend.tls=true
+      - traefik.http.services.frontend.loadbalancer.server.port=80
+      - traefik.http.routers.frontend.middlewares=cloudflare-only@file
+    mem_limit: 128m
+    mem_reservation: 64m
+    oom_score_adj: -100
+
+  website:
+    image: cashtrack/website:${VERSION_WEBSITE}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [.env, secrets/website.env]
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.website.rule=Host(`${DOMAIN}`) || Host(`www.${DOMAIN}`)
+      - traefik.http.routers.website.entrypoints=websecure
+      - traefik.http.routers.website.tls=true
+      - traefik.http.services.website.loadbalancer.server.port=3000
+      - traefik.http.routers.website.middlewares=cloudflare-only@file
+    mem_limit: 640m
+    mem_reservation: 384m
+    oom_score_adj: -100
+
+  mysql-backup:
+    image: cashtrack/mysql-backup:${VERSION_MYSQL_BACKUP}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/mysql-backup.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    # Idle long-runner; Ofelia triggers the actual backup/purge jobs.
+    command: ["tail", "-f", "/dev/null"]
+    volumes:
+      # Textfile collector exchange — backup writes
+      # `mysql_backup_last_success_timestamp_seconds` here, node-exporter scrapes it.
+      - /mnt/data/node-exporter-textfile:/var/lib/node_exporter/textfile_collector
+    labels:
+      - ofelia.enabled=true
+      - ofelia.job-exec.backup.schedule=0 0 3 * * *
+      - ofelia.job-exec.backup.command=php app.php backup
+      - ofelia.job-exec.purge-old.schedule=0 0 4 * * 0
+      - ofelia.job-exec.purge-old.command=php app.php clear --days=7
+    mem_limit: 192m
+    mem_reservation: 128m
+    oom_score_adj: 0
+
+  mysql-exporter:
+    image: prom/mysqld-exporter:v0.15.1
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/mysql-exporter.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    command: ["--mysqld.address=mysql:3306"]
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: 0

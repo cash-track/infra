@@ -1,0 +1,37 @@
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+          permanent: true
+  websecure:
+    address: ":443"
+
+# Prometheus metrics exposed on the websecure entrypoint at /metrics
+# (gated by cloudflare-only middleware via the router label on the traefik service).
+metrics:
+  prometheus:
+    entryPoint: websecure
+    addEntryPointsLabels: true
+    addRoutersLabels: true
+    addServicesLabels: true
+
+accessLog: {}
+log:
+  level: INFO
+
+providers:
+  docker:
+    exposedByDefault: false
+    network: cashtrack-app
+    watch: true
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true

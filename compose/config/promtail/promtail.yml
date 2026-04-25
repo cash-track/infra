@@ -1,0 +1,53 @@
+server:
+  http_listen_port: 9080
+  log_level: info
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Docker SD: discover every container on the docker host, label by container
+  # name + compose service. Logs come from the container's stdout via the
+  # docker socket.
+  - job_name: docker
+    docker_sd_configs:
+      - host: unix:///var/run/docker.sock
+        refresh_interval: 5s
+        filters:
+          - name: network
+            values: ["cashtrack-app"]
+    relabel_configs:
+      - source_labels: ["__meta_docker_container_name"]
+        regex: "/(.*)"
+        target_label: container
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_service"]
+        target_label: service
+      - source_labels: ["__meta_docker_container_label_com_docker_compose_project"]
+        target_label: project
+      - target_label: job
+        replacement: docker
+    pipeline_stages:
+      # Drop healthcheck noise so it doesn't blow the 2 MB/s ingestion budget.
+      - match:
+          selector: '{container=~".+"} |~ "/healthcheck|/ready|/live|kube-probe"'
+          action: drop
+          drop_counter_reason: healthchecks
+      # Try to parse JSON-formatted app logs and lift `level` / `trace_id` to labels.
+      - json:
+          expressions:
+            level: level
+            trace_id: trace_id
+      - labels:
+          level:
+
+  # Host syslog/journald — picked up via /var/log on the droplet (mounted by the
+  # promtail service). Useful for kernel / Docker daemon / cloud-init events.
+  - job_name: host
+    static_configs:
+      - targets: [localhost]
+        labels:
+          job: host
+          __path__: /var/log/*.log

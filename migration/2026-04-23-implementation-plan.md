@@ -528,11 +528,21 @@ Frontend has no secrets in K8s (only `common-config` env vars), so no `frontend.
 
 ### Verification checklist
 
-- [ ] `docker compose -f compose/compose.core.yml -f compose/compose.app.yml -f compose/compose.obs.yml -f compose/compose.telegram.yml config > /dev/null` passes syntactically (requires `VERSION_*` and `DOMAIN` vars exported for the smoke; set dummies).
-- [ ] `grep -rE '(password|secret|token)=[^{]' compose/ ansible/roles/compose-render/templates/` returns zero matches (no plaintext secrets). Match only `{{ op_prefix }}` references.
-- [ ] `yamllint compose/ config/` clean.
-- [ ] Every `env_file:` referenced in a compose file has a corresponding `.env.tpl` in `ansible/roles/compose-render/templates/`.
-- [ ] Every service appears in Prometheus scrape config OR is explicitly exempted (document which in `prometheus.yml` comments).
+- [x] `docker compose -f compose/compose.core.yml -f compose/compose.app.yml -f compose/compose.obs.yml -f compose/compose.telegram.yml config > /dev/null` passes syntactically (requires `VERSION_*` and `DOMAIN` vars exported for the smoke; set dummies). Verified both with and without `--profile stage10`.
+- [x] `grep -rE '(password|secret|token)=[^{]' compose/ ansible/roles/compose-render/templates/` returns zero matches (no plaintext secrets). Match only `{{ op_prefix }}` references.
+- [x] `yamllint compose/ config/` clean (run via `cytopia/yamllint` docker image).
+- [x] Every `env_file:` referenced in a compose file has a corresponding `.env.tpl` in `ansible/roles/compose-render/templates/`. 11:11:11 parity between compose env_file refs, templates, and `secret_files` in `group_vars/all/main.yml`.
+- [x] Every service appears in Prometheus scrape config OR is explicitly exempted (document which in `prometheus.yml` comments). Exemptions: frontend (static SPA), website (no /metrics), redis (no exporter), mysql (via mysql-exporter), mysql-backup (via node-exporter textfile), crashers-bot + home-exporter (Stage 10).
+
+### Notes on deviations from the design snippets
+
+- **Network model.** Each compose file declares the same `networks.app` block (`driver: bridge`, `name: cashtrack-app`) instead of marking it `external: true` in app/obs/telegram. Identical declarations let compose merge cleanly and reuse the named network across stacks; `external: true` would have required pre-creating it out-of-band.
+- **Gateway port.** `GATEWAY_ADDRESS=:8081` (per this plan), Traefik routes to 8081. K8s deployment used `:80` — deliberate divergence the plan called out.
+- **node-exporter scrape.** Host-networked, so Prometheus reaches it via `host.docker.internal:9100`; the prometheus service carries an `extra_hosts: ["host.docker.internal:host-gateway"]` entry. Documented in both `compose.obs.yml` and `prometheus.yml`.
+- **Frontend env template.** Added `frontend.env.tpl` (URLs only, no secrets) — the frontend image consumes `VUE_APP_*` at runtime via its entrypoint, matching the K8s `common-config` envFrom on `infra/services/frontend/deployment.yml`. The original plan said the frontend had no env file; that was incorrect against the K8s reality.
+- **`group_vars/all/main.yml` patch.** `secret_files` updated to include `frontend.env` and `website.env` (the latter was missing from Stage 3's seed list).
+- **Telegram stack.** Service stubs gated behind `profiles: [stage10]` so default `compose up` skips them until Stage 10 fills the bodies.
+- **`.gitignore`.** Added `compose/.env`, `compose/config/traefik/origin-cert.pem`, `compose/config/traefik/origin-key.pem` so rendered/secret artefacts can't slip into git.
 
 ### Commit
 

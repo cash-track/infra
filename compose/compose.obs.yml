@@ -1,0 +1,140 @@
+name: cashtrack
+
+# Observability stack. node-exporter is host-networked; everything else lives on
+# the shared cashtrack-app bridge so Prometheus can resolve targets by name.
+
+networks:
+  app:
+    driver: bridge
+    name: cashtrack-app
+
+services:
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    restart: unless-stopped
+    networks: [app]
+    # node-exporter runs in `network_mode: host`, so prometheus reaches it via
+    # the docker host gateway. The `host-gateway` magic mapping requires this
+    # `extra_hosts` entry on Linux.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    volumes:
+      - /mnt/data/prometheus:/prometheus
+      - ./config/prometheus:/etc/prometheus:ro
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=7d
+      - --storage.tsdb.retention.size=3GB
+      - --web.enable-lifecycle
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9090/-/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 300
+
+  node-exporter:
+    image: prom/node-exporter:v1.8.2
+    restart: unless-stopped
+    # Host-networked: needs unmediated access to host PSI, /proc, /sys.
+    network_mode: host
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+      - /mnt/data/node-exporter-textfile:/var/lib/node_exporter/textfile_collector:ro
+    command:
+      - --path.procfs=/host/proc
+      - --path.sysfs=/host/sys
+      - --path.rootfs=/rootfs
+      - --collector.textfile.directory=/var/lib/node_exporter/textfile_collector
+      - --collector.pressure
+      - --collector.systemd
+    mem_limit: 128m
+    mem_reservation: 64m
+    oom_score_adj: 0
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/grafana.env]
+    user: "472:472"
+    volumes:
+      - /mnt/data/grafana:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./config/grafana/provisioning/dashboards/json:/var/lib/grafana-dashboards:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3000/api/health >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: 256m
+    mem_reservation: 192m
+    oom_score_adj: 300
+
+  loki:
+    image: grafana/loki:3.2.0
+    restart: unless-stopped
+    networks: [app]
+    user: "10001:10001"
+    volumes:
+      - /mnt/data/loki:/loki
+      - ./config/loki/loki.yml:/etc/loki/local-config.yaml:ro
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 500
+
+  tempo:
+    image: grafana/tempo:2.6.0
+    restart: unless-stopped
+    networks: [app]
+    user: "10001:10001"
+    volumes:
+      - /mnt/data/tempo:/var/tempo
+      - ./config/tempo/tempo.yml:/etc/tempo.yaml:ro
+    command: ["-config.file=/etc/tempo.yaml"]
+    mem_limit: 640m
+    mem_reservation: 512m
+    oom_score_adj: 500
+
+  promtail:
+    image: grafana/promtail:3.2.0
+    restart: unless-stopped
+    networks: [app]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/lib/docker/containers:/var/lib/docker/containers:ro
+      - /var/log:/var/log:ro
+      - ./config/promtail:/etc/promtail:ro
+    command: ["-config.file=/etc/promtail/promtail.yml"]
+    depends_on:
+      loki: { condition: service_started }
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: 300
+
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/alertmanager.env]
+    volumes:
+      - /mnt/data/alertmanager:/alertmanager
+      - ./config/alertmanager:/etc/alertmanager:ro
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: 300

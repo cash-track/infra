@@ -1,0 +1,37 @@
+# Alertmanager 0.27 config. The telegram receiver pulls bot_token / chat_id at
+# startup from the env_file (`secrets/alertmanager.env`). `{{ env "..." }}` is
+# the alertmanager template syntax for environment substitution available in
+# 0.26+ — values stay out of disk-resident YAML.
+
+global:
+  resolve_timeout: 5m
+
+templates:
+  - /etc/alertmanager/templates/*.tmpl
+
+route:
+  receiver: telegram
+  group_by: ["alertname", "severity"]
+  group_wait: 10s
+  group_interval: 5m
+  repeat_interval: 30m
+  routes:
+    - matchers:
+        - severity = "critical"
+      receiver: telegram
+      repeat_interval: 15m
+
+receivers:
+  - name: telegram
+    telegram_configs:
+      - bot_token: '{{ env "ALERTMANAGER_TELEGRAM_BOT_TOKEN" }}'
+        chat_id: '{{ env "ALERTMANAGER_TELEGRAM_CHAT_ID" | toInt64 }}'
+        api_url: https://api.telegram.org
+        parse_mode: HTML
+        message: '{{ template "telegram.cash-track.message" . }}'
+        send_resolved: true
+
+inhibit_rules:
+  - source_matchers: [severity = "critical"]
+    target_matchers: [severity = "warning"]
+    equal: ["alertname", "instance"]

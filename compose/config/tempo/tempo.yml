@@ -1,0 +1,43 @@
+# Single-binary Tempo config; aligned with the 3 GB disk slice / 72h retention
+# from design §5 + §15.
+
+stream_over_http_enabled: true
+
+server:
+  http_listen_port: 3200
+  grpc_listen_port: 9095
+  log_level: info
+
+distributor:
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          # OTLP gRPC. api / gateway / website target tempo:4317.
+          endpoint: 0.0.0.0:4317
+
+ingester:
+  max_block_duration: 5m
+  max_bytes_per_trace: 5000000   # 5 MB hard cap; oversize traces dropped at ingest
+
+compactor:
+  compaction:
+    # Total Tempo retention. compactor sweeps blocks older than this.
+    block_retention: 72h
+
+storage:
+  trace:
+    backend: local
+    wal:
+      path: /var/tempo/wal
+    local:
+      path: /var/tempo/blocks
+
+# No metrics-generator: the local Prometheus does not run remote_write as a
+# server, and self-generated histograms aren't worth the extra storage on a
+# single-droplet deploy.
+
+overrides:
+  defaults:
+    ingestion:
+      max_traces_per_user: 50000

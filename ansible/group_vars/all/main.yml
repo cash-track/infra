@@ -1,6 +1,6 @@
 ---
 # Image tags used verbatim — passed straight to `docker pull`. No `v`-stripping,
-# no normalisation. If a release is published as `v1.2.9`, that exact string is
+# no normalization. If a release is published as `v1.2.9`, that exact string is
 # the tag both in `.env` and in `docker pull cashtrack/api:v1.2.9`.
 versions:
   api:           "1.2.9"
@@ -35,6 +35,8 @@ compose_files:
 secret_files:
   - api.env
   - gateway.env
+  - frontend.env
+  - website.env
   - mysql.env
   - mysql-backup.env
   - mysql-exporter.env

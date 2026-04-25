@@ -1,0 +1,35 @@
+name: cashtrack
+
+# Telegram-namespace bots. Service bodies (image, command, Ofelia schedules)
+# are filled in Stage 10 once the K8s CronJobs are catalogued; until then this
+# file declares the network reference and placeholders so `docker compose -f ...
+# config` parses cleanly with the other stacks.
+
+networks:
+  app:
+    driver: bridge
+    name: cashtrack-app
+
+services:
+  crashers-bot:
+    profiles: [stage10]
+    image: cashtrack/crashers-bot:${VERSION_CRASHERS_BOT}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/crashers-bot.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    # Ofelia labels added in Stage 10 from the existing K8s CronJob list.
+    mem_limit: 320m
+    mem_reservation: 256m
+    oom_score_adj: -100
+
+  home-exporter:
+    profiles: [stage10]
+    image: cashtrack/home-exporter:${VERSION_HOME_EXPORTER}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/home-exporter.env]
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: 0

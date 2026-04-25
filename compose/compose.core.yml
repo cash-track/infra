@@ -1,0 +1,81 @@
+name: cashtrack
+
+# Core platform services. Required by every other compose file.
+# Network is created here; app/obs/telegram stacks reference it as `external: false`
+# via `name: cashtrack-app` so the same bridge is reused across the project.
+
+networks:
+  app:
+    driver: bridge
+    name: cashtrack-app
+
+services:
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    networks: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/traefik:/etc/traefik:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command:
+      - --configFile=/etc/traefik/traefik.yml
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.traefik-metrics.rule=Host(`traefik.${DOMAIN}`) && PathPrefix(`/metrics`)
+      - traefik.http.routers.traefik-metrics.entrypoints=websecure
+      - traefik.http.routers.traefik-metrics.tls=true
+      - traefik.http.routers.traefik-metrics.service=prometheus@internal
+      - traefik.http.routers.traefik-metrics.middlewares=cloudflare-only@file
+    mem_limit: 128m
+    mem_reservation: 96m
+    oom_score_adj: -300
+
+  mysql:
+    image: cashtrack/mysql:${VERSION_MYSQL}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/mysql.env]
+    volumes:
+      - /mnt/data/mysql:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    mem_limit: 896m
+    mem_reservation: 768m
+    oom_score_adj: -500
+
+  redis:
+    image: cashtrack/redis:${VERSION_REDIS}
+    restart: unless-stopped
+    networks: [app]
+    # Intentionally no volume — CSRF tokens / caches are accepted-loss on restart.
+    command: ["redis-server", "--maxmemory", "250mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    mem_limit: 320m
+    mem_reservation: 256m
+    oom_score_adj: -200
+
+  ofelia:
+    image: mcuadros/ofelia:v0.3.14
+    restart: unless-stopped
+    networks: [app]
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    command: daemon --docker
+    labels:
+      - ofelia.save-folder=/var/log/ofelia
+      # Failures flow Prometheus → Alertmanager → Telegram via `ofelia_job_failures_total`.
+      - ofelia.on-error=true
+      - ofelia.no-overlap=true
+    mem_limit: 192m
+    mem_reservation: 128m
+    oom_score_adj: 0

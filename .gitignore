@@ -3,7 +3,11 @@
 **/*secret.yml
 
 secrets/
+compose/.env
+compose/config/traefik/origin-cert.pem
+compose/config/traefik/origin-key.pem
 *.tfstate*
+**tfplan*
 .terraform/
 backend.hcl
 /tmp/cashtrack-render/
