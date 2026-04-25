@@ -1,0 +1,61 @@
+#cloud-config
+hostname: ${hostname}
+users:
+  - name: ops
+    groups: [sudo, docker]
+    sudo: ["ALL=(ALL) NOPASSWD:ALL"]
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - ${ops_ssh_public_key}
+
+package_update: true
+packages: [curl, gnupg, python3, python3-apt]
+
+runcmd:
+  # Tailscale
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
+  - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
+  - apt-get update && apt-get install -y tailscale
+  - tailscale up --authkey=${tailscale_authkey} --hostname=${hostname} --advertise-tags=tag:prod-server --ssh --accept-routes
+
+  # Docker
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - chmod a+r /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  - usermod -aG docker ops
+
+  # Block Volume mount — idempotent for replacement case, robust against volume-attach race
+  - |
+    set -e
+    DEV=/dev/disk/by-id/scsi-0DO_Volume_${volume_name}
+
+    # Wait for the udev queue to drain, then poll for the specific device node.
+    # On replacement boots, the Block Volume attach can complete after cloud-init
+    # starts; without a bounded wait, `blkid` races and `mkfs` runs on a missing path.
+    udevadm settle --timeout=30 || true
+    for _ in $(seq 1 60); do [ -b "$DEV" ] && break; sleep 1; done
+    if [ ! -b "$DEV" ]; then
+      logger -s "cloud-init: Block Volume $DEV did not appear within 90s; aborting mount"
+      exit 1
+    fi
+
+    # Key the re-entrance check off the filesystem label, not the by-id path.
+    # `blkid $DEV` alone returns exit-code 2 for both "device missing" and
+    # "device empty" — ambiguous. Label lookup is unambiguous and also survives
+    # device-path changes across replacement.
+    if ! blkid -L cashtrack-data >/dev/null 2>&1; then
+      if blkid "$DEV" >/dev/null 2>&1; then
+        logger -s "cloud-init: $DEV has a filesystem but not label=cashtrack-data; refusing to reformat"
+        exit 1
+      fi
+      mkfs.ext4 -L cashtrack-data "$DEV"
+    fi
+
+    mkdir -p /mnt/data
+    grep -q LABEL=cashtrack-data /etc/fstab || \
+      echo "LABEL=cashtrack-data /mnt/data ext4 defaults,nofail,noatime,nodiratime,discard 0 2" >> /etc/fstab
+    mount -a
+
+  - touch /var/lib/bootstrap-ready

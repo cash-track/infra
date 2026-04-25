@@ -1,3 +1,9 @@
 .cloudflare-edge-cert
 !**/*secret.yml.example
 **/*secret.yml
+
+secrets/
+*.tfstate*
+.terraform/
+backend.hcl
+/tmp/cashtrack-render/
