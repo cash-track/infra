@@ -12,11 +12,11 @@ domain = "cash-track.app"
 
 # Operator: replace with the public MD5 fingerprint(s) of the ops SSH key
 # (run `doctl compute ssh-key list` to obtain).
-ssh_key_fingerprints = ["aa:bb:cc:dd:ee:ff:00:11:22:33:44:55:66:77:88:99"]
+ssh_key_fingerprints = ["2f:b7:25:a6:04:b1:fe:9e:b3:99:a5:af:00:4b:7f:8d"]
 
 # Operator: replace with the matching public key in OpenSSH single-line format
 # (e.g. the contents of ~/.ssh/cashtrack_ops.pub).
-ops_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleReplaceBeforeApply ops@cashtrack"
+ops_ssh_public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIIcRk11JzJTAza6IN1/L62XY6mpKKrdqu/ZdgRWlWre5 vovikems@gmail.com"
 
 tailscale_tags = ["tag:prod-server"]
 
