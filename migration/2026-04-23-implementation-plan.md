@@ -1033,7 +1033,7 @@ Tell operator: *"Stage 10 committed. `make deploy` to bring up crashers-bot + ho
 ### Verification checklist
 
 - [ ] `cash-track/.github` repo exists with 5 workflow files.
-- [ ] Tailscale admin → ACLs → validate JSON, save.
+- [x] Tailscale admin → ACLs → validate JSON, save.
 - [ ] `ship-service.yml` passes `actionlint`.
 - [ ] Claude Code reviews (but does not submit) the PR before operator merges.
 

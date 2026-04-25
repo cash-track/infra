@@ -7,4 +7,14 @@ terraform {
     region       = "us-east-1"
     use_lockfile = true
   }
+  required_providers {
+    digitalocean = {
+      source  = "digitalocean/digitalocean"
+      version = "2.68.0"
+    }
+    tailscale = {
+      source  = "tailscale/tailscale"
+      version = "0.23.0"
+    }
+  }
 }
