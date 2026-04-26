@@ -1,0 +1,55 @@
+---
+# Add a TCP 22 inbound rule to the cashtrack-prod firewall, scoped to a single
+# /32. Break-glass only; Tailscale SSH is the normal access path. Pair with
+# ops/ssh-close.yml as soon as the incident is over.
+#
+# Usage:
+#   DIGITALOCEAN_TOKEN=… ansible-playbook ops/ssh-open.yml -e ip=$(curl -s ifconfig.me)
+
+- name: Open SSH (TCP 22) for one IP on the cashtrack firewall
+  hosts: localhost
+  gather_facts: false
+  vars:
+    firewall_name: cashtrack-prod
+  tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that:
+          - ip is defined and ip | length > 0
+          - lookup('env', 'DIGITALOCEAN_TOKEN') | length > 0
+        fail_msg: "Required: -e ip=<addr> and DIGITALOCEAN_TOKEN in env."
+
+    - name: Look up firewall ID
+      ansible.builtin.uri:
+        url: "https://api.digitalocean.com/v2/firewalls?per_page=200"
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'DIGITALOCEAN_TOKEN') }}"
+        return_content: true
+      register: firewall_list
+      no_log: true
+
+    - name: Resolve firewall ID by name
+      ansible.builtin.set_fact:
+        firewall_id: >-
+          {{ (firewall_list.json.firewalls
+              | selectattr('name', 'equalto', firewall_name)
+              | list
+              | first).id }}
+
+    - name: Add inbound TCP 22 rule for /32 of {{ ip }}
+      ansible.builtin.uri:
+        url: "https://api.digitalocean.com/v2/firewalls/{{ firewall_id }}/rules"
+        method: POST
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'DIGITALOCEAN_TOKEN') }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          inbound_rules:
+            - protocol: tcp
+              ports: "22"
+              sources:
+                addresses:
+                  - "{{ ip }}/32"
+        status_code: [204]
+      no_log: true

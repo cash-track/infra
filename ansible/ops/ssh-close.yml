@@ -1,0 +1,54 @@
+---
+# Remove the TCP 22 inbound rule for a single /32 from the cashtrack-prod
+# firewall. Pair with ops/ssh-open.yml.
+#
+# Usage:
+#   DIGITALOCEAN_TOKEN=… ansible-playbook ops/ssh-close.yml -e ip=$(curl -s ifconfig.me)
+
+- name: Close SSH (TCP 22) for one IP on the cashtrack firewall
+  hosts: localhost
+  gather_facts: false
+  vars:
+    firewall_name: cashtrack-prod
+  tasks:
+    - name: Validate inputs
+      ansible.builtin.assert:
+        that:
+          - ip is defined and ip | length > 0
+          - lookup('env', 'DIGITALOCEAN_TOKEN') | length > 0
+        fail_msg: "Required: -e ip=<addr> and DIGITALOCEAN_TOKEN in env."
+
+    - name: Look up firewall ID
+      ansible.builtin.uri:
+        url: "https://api.digitalocean.com/v2/firewalls?per_page=200"
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'DIGITALOCEAN_TOKEN') }}"
+        return_content: true
+      register: firewall_list
+      no_log: true
+
+    - name: Resolve firewall ID by name
+      ansible.builtin.set_fact:
+        firewall_id: >-
+          {{ (firewall_list.json.firewalls
+              | selectattr('name', 'equalto', firewall_name)
+              | list
+              | first).id }}
+
+    - name: Remove inbound TCP 22 rule for /32 of {{ ip }}
+      ansible.builtin.uri:
+        url: "https://api.digitalocean.com/v2/firewalls/{{ firewall_id }}/rules"
+        method: DELETE
+        headers:
+          Authorization: "Bearer {{ lookup('env', 'DIGITALOCEAN_TOKEN') }}"
+          Content-Type: "application/json"
+        body_format: json
+        body:
+          inbound_rules:
+            - protocol: tcp
+              ports: "22"
+              sources:
+                addresses:
+                  - "{{ ip }}/32"
+        status_code: [204]
+      no_log: true

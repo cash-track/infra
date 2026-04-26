@@ -1,0 +1,51 @@
+---
+# Ships the static compose files, per-service config, and the on-droplet
+# `deploy-service` helper, then brings the full stack up. compose-render runs
+# before this role to populate `secrets/` and the top-level `.env`; mysql-init
+# runs after to apply DB grants against the now-running mysql container.
+
+- name: Ensure droplet project subdirectories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0755"
+  loop:
+    - "{{ droplet_project_dir }}"
+    - "{{ droplet_bin_dir }}"
+    - "{{ droplet_config_dir }}"
+
+- name: Upload compose files
+  ansible.builtin.copy:
+    src: "{{ compose_source_dir }}/{{ item }}"
+    dest: "{{ droplet_project_dir }}/{{ item }}"
+    owner: ops
+    group: ops
+    mode: "0644"
+  loop: "{{ compose_files }}"
+
+- name: Upload per-service config tree
+  ansible.builtin.copy:
+    src: "{{ compose_source_dir }}/config/"
+    dest: "{{ droplet_config_dir }}/"
+    owner: ops
+    group: ops
+    mode: "0644"
+    directory_mode: "0755"
+
+- name: Install deploy-service script
+  ansible.builtin.copy:
+    src: deploy-service
+    dest: "{{ droplet_bin_dir }}/deploy-service"
+    owner: ops
+    group: ops
+    mode: "0755"
+
+- name: Compose up (pull missing, remove orphans)
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    state: present
+    remove_orphans: true
+    pull: missing

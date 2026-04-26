@@ -31,19 +31,20 @@ compose_files:
   - compose.obs.yml
   - compose.telegram.yml
 
-# Per-service env files rendered by compose-render (Stage 5) into /opt/cashtrack/secrets/.
+# Per-service env files rendered by compose-render into /opt/cashtrack/secrets/<name>.env.
+# Bare names (no `.env`) — the role appends the suffix at template-load and copy time.
 secret_files:
-  - api.env
-  - gateway.env
-  - frontend.env
-  - website.env
-  - mysql.env
-  - mysql-backup.env
-  - mysql-exporter.env
-  - alertmanager.env
-  - grafana.env
-  - crashers-bot.env
-  - home-exporter.env
+  - api
+  - gateway
+  - frontend
+  - website
+  - mysql
+  - mysql-backup
+  - mysql-exporter
+  - alertmanager
+  - grafana
+  - crashers-bot
+  - home-exporter
 
 # Service set currently expected to be running on the droplet. Stage 3 leaves this
 # empty — roles guard optional behaviour (e.g. `tailscale serve` for grafana) on

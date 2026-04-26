@@ -1,0 +1,129 @@
+---
+# Renders every per-service env file from a Jinja-templated `.env.tpl` (with
+# embedded `op://` URIs) into a final `.env` shipped to /opt/cashtrack/secrets/
+# on the droplet. Plaintext exists only inside `render_dir` on the control
+# node (laptop or CI runner) for the duration of the play.
+#
+# Also renders the top-level `.env` (no secrets — version pins + DOMAIN) and
+# fetches the Cloudflare origin certificate pair into the droplet's traefik
+# config directory.
+#
+# Every task that touches secret material carries `no_log: true`.
+
+- name: Ensure droplet project + secrets directories exist
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0750"
+  loop:
+    - "{{ droplet_project_dir }}"
+    - "{{ droplet_secrets_dir }}"
+
+- name: Ensure droplet traefik config directory exists
+  ansible.builtin.file:
+    path: "{{ droplet_traefik_dir }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0750"
+
+- name: Ensure local render directory exists
+  ansible.builtin.file:
+    path: "{{ render_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+
+- name: Render env templates locally (Jinja → .env.tpl with op:// refs)
+  ansible.builtin.template:
+    src: "{{ item }}.env.tpl"
+    dest: "{{ render_dir }}/{{ item }}.env.tpl"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  loop: "{{ secret_files }}"
+
+- name: Inject secrets via `op inject` (local)
+  ansible.builtin.command:
+    cmd: >-
+      op inject
+      -i {{ render_dir }}/{{ item }}.env.tpl
+      -o {{ render_dir }}/{{ item }}.env
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  loop: "{{ secret_files }}"
+  changed_when: false
+  no_log: true
+
+- name: Ship rendered .env files to droplet
+  ansible.builtin.copy:
+    src: "{{ render_dir }}/{{ item }}.env"
+    dest: "{{ droplet_secrets_dir }}/{{ item }}.env"
+    mode: "0600"
+    owner: ops
+    group: ops
+  loop: "{{ secret_files }}"
+  notify: "Restart {{ item }}"
+  no_log: true
+
+- name: Render top-level .env on droplet (no secrets — versions + DOMAIN)
+  ansible.builtin.template:
+    src: env.tpl
+    dest: "{{ droplet_project_dir }}/.env"
+    mode: "0644"
+    owner: ops
+    group: ops
+
+- name: Fetch Cloudflare origin certificate from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ cf_origin_cert_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  register: cf_origin_cert
+  changed_when: false
+  no_log: true
+
+- name: Fetch Cloudflare origin key from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ cf_origin_key_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  register: cf_origin_key
+  changed_when: false
+  no_log: true
+
+- name: Install Cloudflare origin certificate on droplet
+  ansible.builtin.copy:
+    content: "{{ cf_origin_cert.stdout }}\n"
+    dest: "{{ droplet_traefik_dir }}/origin-cert.pem"
+    mode: "0644"
+    owner: root
+    group: root
+  notify: Restart traefik
+  no_log: true
+
+- name: Install Cloudflare origin key on droplet
+  ansible.builtin.copy:
+    content: "{{ cf_origin_key.stdout }}\n"
+    dest: "{{ droplet_traefik_dir }}/origin-key.pem"
+    mode: "0600"
+    owner: root
+    group: root
+  notify: Restart traefik
+  no_log: true
+
+- name: Wipe local renders
+  ansible.builtin.file:
+    path: "{{ render_dir }}"
+    state: absent
+  delegate_to: localhost
+  become: false

@@ -1,0 +1,84 @@
+---
+# Idempotent: creates the shared application user (if absent) and grants ALL
+# PRIVILEGES on each database in `databases` (created if absent).
+#
+# Runs after compose-up has started the mysql container. We talk to mysql via
+# `docker exec` rather than over the network because the container doesn't
+# publish 3306 to the host (only the cashtrack-app docker network).
+#
+# Secrets (root password, app user/password) are resolved on the control node
+# via `op read` and passed into mysql exclusively through the `MYSQL_PWD`
+# environment variable — never on the command line, never written to disk.
+
+- name: Load database list
+  ansible.builtin.include_vars:
+    file: databases.yml
+
+- name: Resolve mysql root password from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ mysql_root_password_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  register: mysql_init_root_pw
+  changed_when: false
+  no_log: true
+
+- name: Resolve app user from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ app_user.user_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  register: mysql_init_app_user
+  changed_when: false
+  no_log: true
+
+- name: Resolve app password from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ app_user.password_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  register: mysql_init_app_pw
+  changed_when: false
+  no_log: true
+
+- name: Wait for mysql container to report healthy
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - --format
+      - '{{ "{{" }}.State.Health.Status{{ "}}" }}'
+      - "{{ mysql_container }}"
+  register: mysql_init_health
+  changed_when: false
+  retries: "{{ (mysql_init_wait_seconds / 5) | int }}"
+  delay: 5
+  until: mysql_init_health.stdout == "healthy"
+
+- name: Apply user creation + database grants via mysql client
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker exec -i -e MYSQL_PWD "{{ mysql_container }}" \
+      mysql -uroot -N -B <<'SQL'
+    CREATE USER IF NOT EXISTS '{{ mysql_init_app_user.stdout }}'@'%' IDENTIFIED BY '{{ mysql_init_app_pw.stdout }}';
+    ALTER  USER '{{ mysql_init_app_user.stdout }}'@'%' IDENTIFIED BY '{{ mysql_init_app_pw.stdout }}';
+    {% for db in databases %}
+    CREATE DATABASE IF NOT EXISTS `{{ db }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+    GRANT ALL PRIVILEGES ON `{{ db }}`.* TO '{{ mysql_init_app_user.stdout }}'@'%';
+    {% endfor %}
+    FLUSH PRIVILEGES;
+    SQL
+  environment:
+    MYSQL_PWD: "{{ mysql_init_root_pw.stdout }}"
+  # Idempotent SQL — `mysql -e` always exits 0 on success regardless of whether
+  # IF NOT EXISTS short-circuited. We can't cheaply distinguish "no-op" from
+  # "applied", so the task is reported unchanged on success and accepted as
+  # ok-on-rerun.
+  changed_when: false
+  no_log: true

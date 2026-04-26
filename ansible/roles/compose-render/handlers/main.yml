@@ -1,0 +1,90 @@
+---
+# One handler per secret_files entry. Triggered when an env file's content
+# differs from the prior render (Ansible compares hashes on `copy`). Each
+# handler restarts only its service via `docker_compose_v2 services: [...]
+# restarted: true`. The compose project is the static `/opt/cashtrack` set up
+# by compose-up.
+
+- name: Restart api
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [api]
+    state: restarted
+
+- name: Restart gateway
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [gateway]
+    state: restarted
+
+- name: Restart frontend
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [frontend]
+    state: restarted
+
+- name: Restart website
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [website]
+    state: restarted
+
+- name: Restart mysql
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [mysql]
+    state: restarted
+
+- name: Restart mysql-backup
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [mysql-backup]
+    state: restarted
+
+- name: Restart mysql-exporter
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [mysql-exporter]
+    state: restarted
+
+- name: Restart alertmanager
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [alertmanager]
+    state: restarted
+
+- name: Restart grafana
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [grafana]
+    state: restarted
+
+- name: Restart crashers-bot
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [crashers-bot]
+    state: restarted
+
+- name: Restart home-exporter
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [home-exporter]
+    state: restarted
+
+- name: Restart traefik
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [traefik]
+    state: restarted

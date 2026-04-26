@@ -1,0 +1,40 @@
+---
+# Droplet replacement orchestrator — see design §17 ("Droplet Replacement (DR)
+# Runbook"). RTO 5–8 min. Block Volume + Reserved IP are protected by
+# `prevent_destroy` in Terraform and reattach to the new droplet.
+#
+# Triage first (steps 1–3 of design §17). Reach for this playbook only when
+# the droplet is gone or unrecoverable.
+#
+# Usage:
+#   ansible-playbook replace-droplet.yml
+#   FORCE_REPLACE_REASON="inc-42: ..." ansible-playbook replace-droplet.yml
+
+- name: Pre-flight — refuse if backup is stale (override via FORCE_REPLACE_REASON)
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Run replace-preflight.sh
+      ansible.builtin.command:
+        cmd: "{{ playbook_dir }}/../scripts/replace-preflight.sh"
+      environment:
+        FORCE_REPLACE_REASON: "{{ lookup('env', 'FORCE_REPLACE_REASON') }}"
+      changed_when: false
+
+- name: Replace the droplet via Terraform
+  hosts: localhost
+  gather_facts: false
+  tasks:
+    - name: Replace droplet via terraform apply -replace
+      ansible.builtin.command:
+        cmd: >-
+          terraform
+          -chdir={{ playbook_dir }}/../terraform
+          apply
+          -replace=digitalocean_droplet.host[0]
+          -auto-approve
+      register: tf_replace
+      changed_when: "'No changes' not in tf_replace.stdout"
+
+- name: Re-bootstrap the new droplet
+  ansible.builtin.import_playbook: site.yml

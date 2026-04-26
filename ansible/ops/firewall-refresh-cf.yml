@@ -1,0 +1,25 @@
+---
+# Refresh the Cloudflare IP allowlist on the cashtrack-prod firewall.
+# Terraform fetches both lists via `data "http"` on every apply, so this
+# playbook is a thin wrapper around `terraform apply -target=module.firewall`
+# to avoid touching unrelated state in the same run.
+#
+# Suggested cadence: weekly cron on the operator laptop, or as a GH Actions
+# workflow_dispatch when CF publishes range changes (rare; ~1–2 per year).
+
+- name: Refresh Cloudflare IP ranges on the firewall
+  hosts: localhost
+  gather_facts: false
+  vars:
+    terraform_dir: "{{ playbook_dir }}/../../terraform"
+  tasks:
+    - name: Apply terraform with -target=module.firewall (refreshes CF IP data)
+      ansible.builtin.command:
+        cmd: >-
+          terraform
+          -chdir={{ terraform_dir }}
+          apply
+          -target=module.firewall
+          -auto-approve
+      register: tf_apply
+      changed_when: "'No changes' not in tf_apply.stdout"

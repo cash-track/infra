@@ -1,0 +1,8 @@
+---
+# Where the compose file tree lives in the repo, relative to the playbook.
+# `playbook_dir` resolves to ansible/, so this points at infra/compose/.
+compose_source_dir: "{{ playbook_dir }}/../compose"
+
+droplet_project_dir: /opt/cashtrack
+droplet_bin_dir: "{{ droplet_project_dir }}/bin"
+droplet_config_dir: "{{ droplet_project_dir }}/config"

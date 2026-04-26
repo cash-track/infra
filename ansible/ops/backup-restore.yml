@@ -1,0 +1,136 @@
+---
+# Restore a MySQL dump from cash-track-backups into the running mysql
+# container. Parameterized by `backup_id` (object key under the bucket) or the
+# literal "latest" — in which case the playbook resolves the newest object via
+# `aws s3 ls`.
+#
+# Destructive by design (rewrites tables). No `--check` mode wrapper because
+# restore is fundamentally a write — guard with explicit operator confirmation
+# before invoking. A row-count snapshot of the largest mutable tables is
+# captured before AND after the restore so the operator can confirm the
+# restore did what they expected.
+#
+# Usage:
+#   ansible-playbook ops/backup-restore.yml -e backup_id=cashtrack-2026-04-25.sql.gz
+#   ansible-playbook ops/backup-restore.yml -e backup_id=latest
+
+- name: Restore MySQL backup
+  hosts: prod
+  become: true
+  vars:
+    bucket: "{{ backups.spaces_bucket }}"
+    s3_endpoint: "https://{{ backups.spaces_endpoint }}"
+    droplet_project_dir: /opt/cashtrack
+    verify_tables:
+      - users
+      - wallets
+      - charges
+      - tags
+  pre_tasks:
+    - name: Validate backup_id
+      ansible.builtin.assert:
+        that: backup_id is defined and backup_id | length > 0
+        fail_msg: "Pass `-e backup_id=<key>` or `-e backup_id=latest`."
+
+    - name: Confirm operator intent
+      ansible.builtin.pause:
+        prompt: |
+          About to restore '{{ backup_id }}' from s3://{{ bucket }}/ over
+          the live MySQL on {{ inventory_hostname }}. This OVERWRITES tables.
+          Type 'restore' to continue, anything else to abort.
+      register: restore_confirm
+
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Operator did not confirm — aborting."
+      when: restore_confirm.user_input | default('') != 'restore'
+  tasks:
+    - name: Resolve `latest` to a concrete object key
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+          aws --endpoint-url={{ s3_endpoint }} s3 ls "s3://{{ bucket }}/" \
+          | awk '{print $4}' | sort | tail -n1
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      register: latest_key_lookup
+      changed_when: false
+      when: backup_id == 'latest'
+
+    - name: Pin resolved backup key
+      ansible.builtin.set_fact:
+        resolved_backup: >-
+          {{ latest_key_lookup.stdout if backup_id == 'latest' else backup_id }}
+
+    - name: Pre-restore row counts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+          mysql -uroot --batch --skip-column-names cashtrack \
+          -e "SELECT '{{ item }}', COUNT(*) FROM `{{ item }}`;"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      environment:
+        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+      loop: "{{ verify_tables }}"
+      register: counts_before
+      changed_when: false
+      no_log: true
+
+    - name: Download backup to /tmp inside mysql-backup container
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - compose.core.yml
+          - -f
+          - compose.app.yml
+          - exec
+          - -T
+          - mysql-backup
+          - aws
+          - "--endpoint-url={{ s3_endpoint }}"
+          - s3
+          - cp
+          - "s3://{{ bucket }}/{{ resolved_backup }}"
+          - /tmp/restore.sql.gz
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      changed_when: true
+
+    - name: Apply restore (gunzip → mysql, root password from env)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+          gunzip -c /tmp/restore.sql.gz \
+          | docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+              mysql -uroot
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      environment:
+        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+      changed_when: true
+      no_log: true
+
+    - name: Post-restore row counts
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+          mysql -uroot --batch --skip-column-names cashtrack \
+          -e "SELECT '{{ item }}', COUNT(*) FROM `{{ item }}`;"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      environment:
+        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+      loop: "{{ verify_tables }}"
+      register: counts_after
+      changed_when: false
+      no_log: true
+
+    - name: Restore complete — review row-count deltas
+      ansible.builtin.debug:
+        msg:
+          - "Restored: {{ resolved_backup }}"
+          - "Before:   {{ counts_before.results | map(attribute='stdout') | list }}"
+          - "After:    {{ counts_after.results | map(attribute='stdout') | list }}"

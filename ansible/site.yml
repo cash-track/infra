@@ -13,4 +13,6 @@
     - { role: docker, tags: [docker] }
     - { role: tailscale, tags: [tailscale] }
     - { role: volume, tags: [volume] }
-    # Stages 4–5 add: firewall-refresh, mysql-init, compose-render, compose-up.
+    - { role: compose-render, tags: [compose, render] }
+    - { role: compose-up, tags: [compose, up] }
+    - { role: mysql-init, tags: [mysql, compose] }

@@ -1,0 +1,13 @@
+---
+# 1Password reference for the root credential. Read locally via `op read` and
+# passed to the mysql container via `MYSQL_PWD` (env, never argv).
+mysql_root_password_op_ref: "op://cash-track-prod/mysql/MYSQL_ROOT_PASSWORD"
+
+# Container name to exec against. Matches the `mysql` service in compose.core.yml
+# under the project name `cashtrack`.
+mysql_container: cashtrack-mysql-1
+
+# Wait budget for mysql to come up (seconds). compose-up brings mysql up just
+# before this role runs; the healthcheck has its own retry loop, but a fresh
+# droplet may be doing first-boot initdb work that takes longer.
+mysql_init_wait_seconds: 180

@@ -660,12 +660,19 @@ No operator action. Proceed to Stage 5.
 
 ### Verification checklist
 
-- [ ] `ansible-playbook site.yml --syntax-check` passes.
-- [ ] `ansible-lint ansible/` clean.
-- [ ] Every `op://` reference in `.env.tpl` files resolves syntactically — `op inject` against the templates with a mock vault would fail only on missing fields (not syntax).
-- [ ] `no_log: true` appears on every task that processes a secret (grep for `op inject` / `env.{` in task files).
-- [ ] `deploy-service` script shellcheck-clean: `shellcheck ansible/bin/deploy-service`.
-- [ ] No role writes a secret to git or to any non-ephemeral location outside `/opt/cashtrack/secrets/`.
+- [x] `ansible-playbook site.yml --syntax-check` passes (also for `deploy.yml`, `replace-droplet.yml`, all four `ops/*.yml`).
+- [x] `ansible-lint ansible/` clean at the **production** profile (0 failures, 0 warnings across 21 files).
+- [x] Every `op://` reference in `.env.tpl` files resolves syntactically — templates are pure Jinja-formed `op://cash-track-prod/<item>/<field>` URIs, no missing pieces.
+- [x] `no_log: true` appears on every task that processes a secret. Audited via grep + per-task scan of `roles/mysql-init/tasks/main.yml`, `roles/compose-render/tasks/main.yml`, `ops/backup-restore.yml` — every task that touches an `op read`, `op inject`, MYSQL root password, or rendered `.env` body carries `no_log: true`.
+- [x] `deploy-service` script clean. `shellcheck` not installed locally; fell back to `bash -n` (parse-clean). Run `shellcheck ansible/roles/compose-up/files/deploy-service` in CI when available.
+- [x] No role writes a secret to git or to any non-ephemeral location outside `/opt/cashtrack/secrets/`. Local plaintext lives only in `/tmp/cashtrack-render/` for the duration of `compose-render` and is wiped by the final task; CF cert/key go to `/opt/cashtrack/config/traefik/origin-{cert,key}.pem` (mode 0644/0600 root); rendered env files go to `/opt/cashtrack/secrets/<name>.env` (mode 0600 ops).
+
+**Notes carried out of stage 5:**
+
+- `secret_files` in `group_vars/all/main.yml` switched from `<name>.env` to bare names (`api`, `gateway`, …) so the role's `loop` matches the design §11 pattern (`{{ item }}.env.tpl` / `{{ item }}.env`). Mirrored in `roles/compose-render/defaults/main.yml`.
+- `deploy-service` ships from `roles/compose-up/files/deploy-service` (not `ansible/bin/deploy-service` as in the plan's "Files" sketch) — keeps it co-located with the role that installs it.
+- `mysql-init` talks to mysql via `docker exec` rather than `community.mysql.mysql_db` (mysql container does not publish 3306 on the host; `docker exec` avoids adding a network surface or pymysql installation requirement).
+- Site role order is `compose-render → compose-up → mysql-init` (compose-up must run first so the mysql container exists for mysql-init to exec into; compose-render must run before compose-up so `secrets/mysql.env` exists for the container).
 
 ### Commit
 

@@ -1,0 +1,36 @@
+---
+# Vault prefix used by every `op://` reference in env templates. Group_vars/all
+# already carries `secret_files`; the same list is mirrored here as a default
+# so the role is usable in isolation (e.g. dry-run from a sandbox playbook).
+op_prefix: "op://cash-track-prod"
+
+# Local control-node directories. `render_dir` holds plaintext .env material
+# for the duration of the play, then is wiped.
+render_dir: /tmp/cashtrack-render
+
+# Target layout on the droplet. Matches design §7 "droplet-side file layout".
+droplet_project_dir: /opt/cashtrack
+droplet_secrets_dir: "{{ droplet_project_dir }}/secrets"
+droplet_traefik_dir: "{{ droplet_project_dir }}/config/traefik"
+
+# Mirrors group_vars/all/main.yml. Bare names — `.env.tpl` and `.env` suffixes
+# are appended at template-load and copy time.
+secret_files:
+  - api
+  - gateway
+  - frontend
+  - website
+  - mysql
+  - mysql-backup
+  - mysql-exporter
+  - alertmanager
+  - grafana
+  - crashers-bot
+  - home-exporter
+
+# 1Password attachment refs for the Cloudflare origin certificate. Two file
+# attachments on the same `cloudflare-origin-cert` item — CF only shows the
+# private key once at creation time, so both pieces are saved into 1P from the
+# CF dashboard at issuance.
+cf_origin_cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"
+cf_origin_key_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"

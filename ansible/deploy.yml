@@ -1,0 +1,43 @@
+---
+# Single-service deploy entry point — used when an infra change (compose file,
+# env template, config tweak) needs to land on the droplet without going
+# through the per-service `ship-service.yml` GH workflow.
+#
+# Usage:
+#   ansible-playbook deploy.yml -e service=api
+#   ansible-playbook deploy.yml -e service=traefik -e tag=v3.1.5
+#
+# `tag` is optional; when set, it overrides the version pin in
+# group_vars/all/main.yml for this run only.
+
+- name: Deploy a single service
+  hosts: prod
+  become: true
+  pre_tasks:
+    - name: Validate `service` is set
+      ansible.builtin.assert:
+        that: service is defined and service | length > 0
+        fail_msg: "Pass `-e service=<name>` to select which compose service to deploy."
+
+    - name: Override version pin if `tag` was provided
+      ansible.builtin.set_fact:
+        versions: "{{ versions | combine({service | replace('-', '_'): tag}) }}"
+      when: tag is defined and tag | length > 0
+  tasks:
+    - name: Run compose-render (renders only — no_log throughout)
+      ansible.builtin.import_role:
+        name: compose-render
+      tags: [compose]
+
+    - name: Run compose-up
+      ansible.builtin.import_role:
+        name: compose-up
+      tags: [compose]
+
+    - name: Force restart the targeted service
+      community.docker.docker_compose_v2:
+        project_src: /opt/cashtrack
+        files: "{{ compose_files }}"
+        services: ["{{ service }}"]
+        state: restarted
+      tags: [compose]
