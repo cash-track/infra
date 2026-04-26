@@ -10,4 +10,4 @@ compose/config/traefik/origin-key.pem
 **tfplan*
 .terraform/
 backend.hcl
-./ansible
+/tmp/cashtrack-render/
