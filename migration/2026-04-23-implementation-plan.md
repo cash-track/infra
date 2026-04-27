@@ -1071,7 +1071,7 @@ Tell operator: *"Stage 11 committed. Please create the GitHub repo if not alread
 
 **Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`.
 
-**Out of scope:** `crashers-bot` and `home-exporter` live in repos outside the `cash-track` GitHub org (Docker Hub namespace `vovanms/*`). They release on their own cadence; the operator bumps `versions.crashers_bot` / `versions.home_exporter` in `infra/ansible/group_vars/all/main.yml` and pushes to `cash-track/infra` to redeploy. They do not consume the org reusable `ship-service.yml` workflow.
+**Deferred (not impossible):** `crashers-bot` and `home-exporter` live in repos outside the `cash-track` GitHub org (`vokomarov/*` on GitHub, `vovanms/*` on Docker Hub). For cutover they stay on the manual path — the operator bumps `versions.crashers_bot` / `versions.home_exporter` in `infra/ansible/group_vars/all/main.yml` and pushes to `cash-track/infra` to redeploy. Folding them onto the org reusable workflow is post-cutover work tracked in **Future work: Bot repo workflow consolidation** at the bottom of this document — the migration there is intentionally deferred to keep cutover scope narrow, not abandoned.
 
 ### Action items
 
@@ -1285,3 +1285,153 @@ Claude Code writes only:
 - Documentation telling the operator what to paste where
 
 **What could slip:** the handoff between stages depends on operator signals. Without a confirmed "Stage N done", Claude Code must not start Stage N+1 assuming N worked. Build this into the session prompts: *"Before starting Stage X, confirm Stage X-1 is done by checking git log for the expected commit and asking the operator to confirm."*
+
+---
+
+## Future work: Bot repo workflow consolidation (post-cutover)
+
+**Goal:** Fold `vokomarov/crashers-bot` and `vokomarov/home-exporter` onto the org reusable `ship-service.yml` so both bots ship through the same `tag → build → push → infra version bump → droplet pulls` pipeline as the cash-track-org services. **Preserve every operation the current K8s pipeline performs** — no manual hooks left dangling on the operator.
+
+**Why deferred:** the bot repos live under a personal account (`vokomarov`), so `cash-track`'s org-level secrets cannot reach them, and the cross-org version-bump PR needs a PAT/GitHub App token. Doing this during cutover would add 4–5 secrets per repo plus a token-rotation surface to a week that already has enough moving parts. After cutover (target: 2–4 weeks post-migration), pick this up as one focused session.
+
+### Current ops to preserve (audit of what the K8s release pipeline does today)
+
+#### crashers-bot (Laravel HTTP bot)
+From `vokomarov/crashers-bot/.github/workflows/release.yml`:
+
+1. **Build & push** `vovanms/crashers_bot_api:<semver>` to Docker Hub on tag.
+2. **Pre-deploy:** `php artisan webhook:unset` — tells Telegram to stop POSTing to the bot URL while the new pod rolls.
+3. **Deploy:** new image picked up by the orchestrator (in K8s today, by `compose up -d` post-migration).
+4. **Post-deploy migration:** `php artisan migrate --force` — Laravel DB migrations against the shared MySQL.
+5. **Post-deploy:** `php artisan webhook:set` — re-registers the public webhook URL so Telegram resumes delivery.
+
+Everything between (1) and (5) is mandatory per release; skip any of (2)–(5) and the bot either misses messages, runs against an outdated schema, or never re-registers.
+
+#### home-exporter (Go ICMP exporter)
+The repo currently has **no** `.github/workflows/`. Today the operator builds and pushes by hand (`make build && make push`) and edits the K8s deployment YAML. There are no Laravel-style migration or webhook hooks — just build + push + redeploy.
+
+### Required changes in the org reusable `ship-service.yml`
+
+Stage 11 builds `ship-service.yml` for the cash-track-org case. To accept external-repo callers without forking the workflow, generalize three things:
+
+1. **Image namespace input.** Add an `image` input that defaults to `cashtrack/${{ inputs.service }}` but can be overridden — e.g. `vovanms/crashers_bot_api`, `vovanms/home_exporter`. The current Stage 12 template already passes `image:` explicitly, so this is mostly a matter of *not* hardcoding the namespace internally.
+2. **Pre/post-deploy hook inputs.** Add optional `pre_deploy_command` and `post_deploy_command` string inputs. When set, the workflow runs them via Tailscale SSH + `docker compose exec <service> sh -c "<command>"` against the droplet. For services that don't need them (`api`, `gateway`, `frontend`, `website`, `home-exporter`), they stay empty. Only `crashers-bot` populates them.
+3. **`infra` repo bump path.** The version-bump-PR step writes to `cash-track/infra`. For org-callers, the workflow's default `GITHUB_TOKEN` plus a `cash-track`-scoped GitHub App is enough. For external callers, the caller passes an `infra_pat` secret (fine-grained PAT with `contents: write` + `pull-requests: write` on `cash-track/infra`); the workflow uses it for the PR step only. Make the input optional with the GitHub App as the default.
+
+These three generalizations also benefit the cash-track-org services — keep the inputs in the shared workflow even if no current consumer uses them yet.
+
+### Per-bot-repo plumbing
+
+#### Secrets to mirror into each bot repo
+
+| Secret | Source | Used by | Notes |
+|---|---|---|---|
+| `DOCKER_HUB_USER` | shared `vovanms` Docker Hub account | build/push step | already configured in `vokomarov/crashers-bot` |
+| `DOCKER_HUB_TOKEN` | shared `vovanms` Docker Hub account | build/push step | already configured in `vokomarov/crashers-bot` |
+| `TAILSCALE_OAUTH_CLIENT_ID` | cash-track Tailscale tailnet OAuth client | SSH-into-droplet step | scoped to ephemeral nodes with the `tag:ci` ACL tag |
+| `TAILSCALE_OAUTH_CLIENT_SECRET` | same | SSH-into-droplet step | rotate if either repo's secret-store is compromised |
+| `INFRA_REPO_PAT` | fine-grained PAT, `vokomarov` user | infra version-bump PR | scope: `cash-track/infra` repo only, `contents: write` + `pull-requests: write`; 90-day expiry; calendar reminder to rotate |
+| `OP_SERVICE_ACCOUNT_TOKEN` | 1Password Service Account | only if `op inject` runs from this workflow | not needed for build/push; only needed if a future hook reads secrets |
+
+Add these as **repository secrets** (not environment secrets) unless you're doing per-environment promotion. crashers-bot already has `DOCKER_HUB_*` and `DIGITALOCEAN_ACCESS_TOKEN` — drop the DO token after cutover, add the four new ones.
+
+#### Container-side hooks for crashers-bot (recommended)
+
+Bake the migration and webhook calls into the container itself, so the deploy workflow stays generic:
+
+1. **DB migrations on container start.** Modify the entrypoint (`run` or the Dockerfile `CMD`) to run `php artisan migrate --force` before starting the worker. Idempotent; takes <2s when there are no new migrations.
+2. **Webhook registration on container start.** Run `php artisan webhook:set` after migrations. Telegram's `setWebhook` is idempotent (re-registering the same URL is a no-op apart from a 200 response).
+3. **Webhook unregistration on graceful shutdown.** Optional. Compose's default `SIGTERM` + 10s grace gives Laravel enough time to run a registered shutdown hook (`pcntl_signal(SIGTERM, ...)` calling `php artisan webhook:unset`). In practice this is *not* strictly required — when the new container comes up it re-registers the same URL, and Telegram retries undelivered updates for 24h. Skip this and you lose ~1–3s of message responsiveness during deploy; acceptable for a personal bot.
+
+This eliminates the need for `pre_deploy_command` / `post_deploy_command` in the shared workflow *for crashers-bot specifically*. Keep those inputs in the shared workflow anyway — they're cheap and useful as an escape hatch for future services that can't bake hooks into the image.
+
+#### Fallback: post-deploy hooks via the shared workflow
+
+If you don't want to touch the bot's container image, populate the workflow inputs instead:
+
+```yaml
+# vokomarov/crashers-bot/.github/workflows/release.yml
+jobs:
+  ship:
+    uses: cash-track/.github/.github/workflows/ship-service.yml@main
+    with:
+      service:              crashers-bot
+      image:                vovanms/crashers_bot_api
+      tag:                  ${{ github.ref_name }}
+      pre_deploy_command:   "php artisan webhook:unset"
+      post_deploy_command:  "php artisan migrate --force && php artisan webhook:set"
+    secrets:
+      DOCKER_HUB_USER:               ${{ secrets.DOCKER_HUB_USER }}
+      DOCKER_HUB_TOKEN:              ${{ secrets.DOCKER_HUB_TOKEN }}
+      TAILSCALE_OAUTH_CLIENT_ID:     ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+      TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+      INFRA_REPO_PAT:                ${{ secrets.INFRA_REPO_PAT }}
+```
+
+Note that `secrets: inherit` does **not** work cross-account — secrets must be passed explicitly when the caller is in a different account/org from the callee.
+
+#### home-exporter release.yml (new, doesn't exist today)
+
+```yaml
+# vokomarov/home-exporter/.github/workflows/release.yml
+name: Release
+on:
+  push:
+    tags: ['v*.*.*']
+jobs:
+  ship:
+    uses: cash-track/.github/.github/workflows/ship-service.yml@main
+    with:
+      service: home-exporter
+      image:   vovanms/home_exporter
+      tag:     ${{ github.ref_name }}
+    secrets:
+      DOCKER_HUB_USER:               ${{ secrets.DOCKER_HUB_USER }}
+      DOCKER_HUB_TOKEN:              ${{ secrets.DOCKER_HUB_TOKEN }}
+      TAILSCALE_OAUTH_CLIENT_ID:     ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+      TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+      INFRA_REPO_PAT:                ${{ secrets.INFRA_REPO_PAT }}
+```
+
+### `cash-track/.github` repo visibility
+
+Reusable workflows can be called cross-account **only when the workflow's repo is public** (or both caller and callee are in the same org). Confirm `cash-track/.github` is public before this work starts. The deploy choreography becomes world-readable — that's fine, it contains no secret material, only how the steps are wired. Sensitive material flows in via inputs/secrets at call time.
+
+### Action items (when ready to do this work)
+
+1. **Generalize `ship-service.yml`** in `cash-track/.github`:
+   - Add `image` input (default `cashtrack/${{ inputs.service }}`).
+   - Add `pre_deploy_command` / `post_deploy_command` string inputs (default empty).
+   - Add `INFRA_REPO_PAT` secret input (default empty); use the cash-track GitHub App when empty, else use the PAT.
+   - Confirm `cash-track/.github` is public.
+2. **(Optional but recommended)** in `vokomarov/crashers-bot`: bake `php artisan migrate --force` + `php artisan webhook:set` into the container entrypoint, ship a release, verify on the droplet.
+3. **Mint the cross-org PAT.** Create a fine-grained PAT under the `vokomarov` GitHub user, scoped only to the `cash-track/infra` repo, permissions `Contents: Read and write` + `Pull requests: Read and write`, expiry 90 days. Store under both repos as `INFRA_REPO_PAT`.
+4. **Mirror the four shared secrets** (`DOCKER_HUB_*`, `TAILSCALE_OAUTH_*`) into both bot repos.
+5. **Replace `vokomarov/crashers-bot/.github/workflows/release.yml`** with the new `ship-service.yml`-calling version. Delete `DIGITALOCEAN_ACCESS_TOKEN` afterward.
+6. **Create `vokomarov/home-exporter/.github/workflows/release.yml`** (didn't exist before) using the template above.
+7. **Smoke test on a scratch tag** (`v0.0.0-test`) in each repo: confirm image push to Docker Hub, confirm PR opened against `cash-track/infra` bumping the version, confirm pre/post hooks fire on the droplet (for crashers-bot only).
+8. **Document the rotation cadence** for `INFRA_REPO_PAT` in `cash-track/infra/README.md` — calendar reminder, owner, where the secret lives.
+
+### Verification checklist
+
+- [ ] `ship-service.yml` accepts `image`, `pre_deploy_command`, `post_deploy_command`, `INFRA_REPO_PAT` inputs without breaking existing cash-track-org callers (api/gateway/frontend/website still work).
+- [ ] `cash-track/.github` is public.
+- [ ] Both bot repos have `DOCKER_HUB_USER`, `DOCKER_HUB_TOKEN`, `TAILSCALE_OAUTH_CLIENT_ID`, `TAILSCALE_OAUTH_CLIENT_SECRET`, `INFRA_REPO_PAT` configured.
+- [ ] crashers-bot scratch-tag run: image at `vovanms/crashers_bot_api:0.0.0-test` exists on Docker Hub; PR open against `cash-track/infra` bumping `crashers_bot`; webhook is reachable post-deploy (curl `https://crashers-bot.<DOMAIN>/` returns 200).
+- [ ] crashers-bot DB migrations confirmed running (either via container entrypoint logs or post-deploy hook output in the workflow run).
+- [ ] home-exporter scratch-tag run: image at `vovanms/home_exporter:0.0.0-test` exists; PR open against `cash-track/infra` bumping `home_exporter`; metrics endpoint reachable post-deploy (`curl http://home-exporter:2112/metrics` from a sibling compose service returns 200).
+- [ ] Old `release.yml` in `vokomarov/crashers-bot` (with kubectl/doctl steps) deleted, not just disabled.
+- [ ] `DIGITALOCEAN_ACCESS_TOKEN` removed from `vokomarov/crashers-bot` repo secrets.
+- [ ] PAT rotation reminder filed in operator's calendar.
+
+### Acceptance: 100% ops parity
+
+The pipeline is "done" when, for both bots, a `git push --tags` triggers everything below without manual operator intervention:
+
+- ✅ Image built and pushed to `vovanms/*` on Docker Hub.
+- ✅ `cash-track/infra/ansible/group_vars/all/main.yml` bumped via auto-PR (operator merges to deploy).
+- ✅ On infra PR merge: droplet pulls the new image and restarts the service via the existing `compose-up` role.
+- ✅ For crashers-bot: DB migrations applied; Telegram webhook re-registered (via container entrypoint or post-deploy hook).
+- ✅ Old workflow steps that only existed for K8s (`doctl`, `kubectl apply`, `kubectl exec`, `kubectl rollout status`, MySQL pod restart) are gone — the new pipeline does not depend on K8s being reachable.
+
+If any of those bullets isn't met, the consolidation isn't done and the operator is still doing manual ops somewhere.
