@@ -77,6 +77,12 @@ scrape_configs:
     static_configs:
       - targets: ["grafana:3000"]
 
+  # home-exporter exposes Prometheus metrics on container port 2112; scrape
+  # internally over the cashtrack-app bridge.
+  - job_name: home-exporter
+    static_configs:
+      - targets: ["home-exporter:2112"]
+
   # Services intentionally NOT scraped:
   # - mysql:        scraped indirectly via mysql-exporter (no direct exporter)
   # - redis:        no exporter shipped (acceptable; Redis is treated as ephemeral)

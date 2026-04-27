@@ -1,9 +1,10 @@
 name: cashtrack
 
-# Telegram-namespace bots. Service bodies (image, command, Ofelia schedules)
-# are filled in Stage 10 once the K8s CronJobs are catalogued; until then this
-# file declares the network reference and placeholders so `docker compose -f ...
-# config` parses cleanly with the other stacks.
+# Telegram-namespace apps. crashers-bot is a Laravel HTTP bot (Telegram webhook
+# receiver + scheduler); home-exporter is a Prometheus-style exporter that
+# ICMP-pings remote hosts and reports state to Telegram. Both keep the K8s
+# `telegram-bots` namespace separation 1:1 so per-app image releases stay
+# independent.
 
 networks:
   app:
@@ -12,24 +13,61 @@ networks:
 
 services:
   crashers-bot:
-    profiles: [stage10]
     image: cashtrack/crashers-bot:${VERSION_CRASHERS_BOT}
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/crashers-bot.env]
     depends_on:
       mysql: { condition: service_healthy }
-    # Ofelia labels added in Stage 10 from the existing K8s CronJob list.
+      redis: { condition: service_started }
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8090/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.crashers-bot.rule=Host(`crashers-bot.${DOMAIN}`)
+      - traefik.http.routers.crashers-bot.entrypoints=websecure
+      - traefik.http.routers.crashers-bot.tls=true
+      - traefik.http.services.crashers-bot.loadbalancer.server.port=8090
+      - traefik.http.routers.crashers-bot.middlewares=cloudflare-only@file
+      # Replaces the K8s `crashers-bot-scheduler` CronJob (`* * * * *` running
+      # `php artisan schedule:run`). Ofelia's 6-field cron: at second 0 every minute.
+      - ofelia.enabled=true
+      - ofelia.job-exec.scheduler.schedule=0 * * * * *
+      - ofelia.job-exec.scheduler.command=php artisan schedule:run
     mem_limit: 320m
     mem_reservation: 256m
     oom_score_adj: -100
 
   home-exporter:
-    profiles: [stage10]
     image: cashtrack/home-exporter:${VERSION_HOME_EXPORTER}
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/home-exporter.env]
+    # ICMP probes need raw sockets. K8s ran the pod `privileged: true`; the
+    # smaller `NET_RAW` capability is enough for ping(2). Keeps the container
+    # otherwise unprivileged.
+    cap_add: [NET_RAW]
+    volumes:
+      # Rendered by ansible/roles/compose-render from
+      # `home-exporter.config.yml.tpl` (Jinja → op inject). Lives under
+      # `secrets/` because telegramChatId + probe host come from 1Password.
+      - ./secrets/home-exporter/config.yml:/app/config/config.yml:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:2112/ >/dev/null"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.home-exporter.rule=Host(`home-exporter.${DOMAIN}`)
+      - traefik.http.routers.home-exporter.entrypoints=websecure
+      - traefik.http.routers.home-exporter.tls=true
+      - traefik.http.services.home-exporter.loadbalancer.server.port=80
+      - traefik.http.routers.home-exporter.middlewares=cloudflare-only@file
     mem_limit: 128m
     mem_reservation: 96m
     oom_score_adj: 0

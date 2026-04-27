@@ -28,6 +28,15 @@ secret_files:
   - crashers-bot
   - home-exporter
 
+# Non-env secret artefacts — config files that mix structural YAML with op://
+# references. Each entry: a Jinja template under `templates/`, a destination
+# under `{{ droplet_secrets_dir }}/`, and the compose service to restart on
+# change. Same render → op inject → ship pipeline as `secret_files`.
+secret_config_files:
+  - template: home-exporter.config.yml.tpl
+    dest: home-exporter/config.yml
+    service: home-exporter
+
 # 1Password attachment refs for the Cloudflare origin certificate. Two file
 # attachments on the same `cloudflare-origin-cert` item — CF only shows the
 # private key once at creation time, so both pieces are saved into 1P from the

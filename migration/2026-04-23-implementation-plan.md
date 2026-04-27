@@ -99,7 +99,7 @@
    | + `alertmanager-telegram`  | `BOT_TOKEN`, `CHAT_ID` | New (BotFather + private channel) | alertmanager |
    | `grafana`                  | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana if migrating; else generate | grafana |
    | + `crashers-bot`           | TBD — populate by inspecting `kubectl -n telegram-bots get secret crashers-bot-secret`; expected: `BOT_TOKEN`, plus any app-specific keys | `telegram-bots/crashers-bot-secret` | crashers-bot |
-   | + `home-exporter`          | TBD — populate by inspecting `kubectl -n telegram-bots get secret home-exporter-secret` | `telegram-bots/home-exporter-secret` | home-exporter |
+   | + `home-exporter`          | `TELEGRAM_BOT_TOKEN` (mirrors `home-exporter-secret`) **plus** `HOME_TELEGRAM_CHAT_ID`, `HOME_PROBE_HOST` (extracted from the K8s `home-exporter-config` ConfigMap so the YAML config can be rendered via op inject — see `home-exporter.config.yml.tpl`) | `telegram-bots/home-exporter-secret` + `home-exporter-config` ConfigMap | home-exporter |
    | + `cloudflare-origin-cert` | Two file attachments: `origin-cert.pem`, `origin-key.pem` | Cloudflare dashboard → SSL/TLS → Origin Server (save both the certificate textbox and the private-key textbox at creation time — Cloudflare does not retain the key) | traefik |
    | + `tailscale`              | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` (tags `tag:prod-server,tag:ci`) | Tailscale admin → OAuth clients | terraform (cloud-init authkey mint) |
    | + `dockerhub`              | `USERNAME`, `TOKEN` | Docker Hub PAT, scope `read+write` on `cashtrack/*` | CI |
@@ -935,6 +935,9 @@ Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_
 - Modify: `./infra/compose/compose.telegram.yml`
 - Modify: `./infra/ansible/roles/compose-render/templates/crashers-bot.env.tpl` (stubbed in Stage 4 — fill with the actual env surface)
 - Modify: `./infra/ansible/roles/compose-render/templates/home-exporter.env.tpl` (same)
+- Create: `./infra/ansible/roles/compose-render/templates/home-exporter.config.yml.tpl` (the binary's `homes:` config; rendered via op inject because `telegramChatId` and `host` are sensitive)
+- Modify: `./infra/ansible/roles/compose-render/{defaults,tasks}/main.yml` and `./infra/ansible/group_vars/all/main.yml` to add `secret_config_files` (renders non-env secret artefacts the same way `secret_files` renders env files)
+- Add: Prometheus scrape entry for `home-exporter:2112` in `./infra/compose/config/prometheus/prometheus.yml`
 
 ### Action items
 
@@ -990,15 +993,18 @@ Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_
    DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
    ```
 4. **Fill `home-exporter.env.tpl`** — same shape, sourcing secrets from the `home-exporter` vault. If home-exporter doesn't touch MySQL, drop the `DB_*` block.
-5. **Update `group_vars/all/main.yml`** — add `versions.crashers_bot` and `versions.home_exporter` to the versions map (and reflect them as `VERSION_CRASHERS_BOT` / `VERSION_HOME_EXPORTER` in `env.tpl`). Drop any prior `versions.tg_bot` / `VERSION_TG_BOT` reference.
+5. **Render `home-exporter.config.yml` through op inject.** The K8s `home-exporter-config` ConfigMap embeds two sensitive values directly in YAML (`telegramChatId` and the ICMP probe `host`). Move them to 1Password (vault item `home-exporter`, fields `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST`) and add a `home-exporter.config.yml.tpl` template alongside the env templates. Register the file under `secret_config_files` in `group_vars/all/main.yml` and `compose-render/defaults/main.yml`; the role renders, op-injects, and ships it to `/opt/cashtrack/secrets/home-exporter/config.yml` (mode 0600). Mount that file in `compose.telegram.yml` at `/app/config/config.yml`.
+6. **Update `group_vars/all/main.yml`** — add `versions.crashers_bot` and `versions.home_exporter` to the versions map (and reflect them as `VERSION_CRASHERS_BOT` / `VERSION_HOME_EXPORTER` in `env.tpl`). Drop any prior `versions.tg_bot` / `VERSION_TG_BOT` reference.
 
 ### Verification checklist
 
-- [ ] `docker compose -f compose.core.yml -f compose.telegram.yml config` validates with `VERSION_CRASHERS_BOT` and `VERSION_HOME_EXPORTER` set.
-- [ ] After deploy, `docker compose logs crashers-bot` shows the bot connecting to Telegram (or the equivalent app-level success line).
-- [ ] If home-exporter exposes metrics, `curl http://home-exporter:<port>/metrics` from another container returns Prometheus-format output and the new scrape job in Prometheus shows it `UP`.
-- [ ] Any Ofelia jobs registered for crashers-bot appear in `docker compose logs ofelia`.
-- [ ] No reference to `tg-bot`, `telegram-bot`, `mysql-app-users`, `TG_BOT_APP_PASSWORD`, or `VERSION_TG_BOT` remains anywhere in `./infra/`.
+- [x] `docker compose -f compose.core.yml -f compose.telegram.yml config` validates with `VERSION_CRASHERS_BOT` and `VERSION_HOME_EXPORTER` set.
+- [ ] After deploy, `docker compose logs crashers-bot` shows the bot connecting to Telegram (or the equivalent app-level success line). *(deferred — runtime check)*
+- [ ] If home-exporter exposes metrics, `curl http://home-exporter:<port>/metrics` from another container returns Prometheus-format output and the new scrape job in Prometheus shows it `UP`. *(deferred — runtime check; scrape job added to `compose/config/prometheus/prometheus.yml` targeting `home-exporter:2112`)*
+- [ ] Any Ofelia jobs registered for crashers-bot appear in `docker compose logs ofelia`. *(deferred — runtime check; one job `scheduler` wired with `0 * * * * *` running `php artisan schedule:run`, replacing the K8s `crashers-bot-scheduler` CronJob)*
+- [x] No reference to `tg-bot`, `telegram-bot`, `mysql-app-users`, `TG_BOT_APP_PASSWORD`, or `VERSION_TG_BOT` remains anywhere in `./infra/`.
+- [x] `compose/config/home-exporter/` no longer exists in git; the `homes:` config is rendered from `home-exporter.config.yml.tpl` via op inject and shipped to `/opt/cashtrack/secrets/home-exporter/config.yml` with mode 0600.
+- [ ] On first `compose-render` run, the operator's 1Password `home-exporter` item must carry `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST` fields populated from the K8s `home-exporter-config` ConfigMap; otherwise `op inject` exits non-zero. *(deferred — operator action at first apply)*
 
 ### Commit
 
@@ -1006,7 +1012,7 @@ Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_
 
 ### Handoff
 
-Tell operator: *"Stage 10 committed. `make deploy` to bring up crashers-bot + home-exporter, then verify per checklist."*
+Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exporter` 1Password item has `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST` fields populated (they come from the K8s `home-exporter-config` ConfigMap and now drive `home-exporter.config.yml` via op inject — without them the render step fails). Then bring up crashers-bot + home-exporter and verify per checklist."*
 
 ---
 

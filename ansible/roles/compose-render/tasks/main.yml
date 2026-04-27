@@ -71,6 +71,57 @@
   notify: "Restart {{ item }}"
   no_log: true
 
+- name: Render secret config templates locally (Jinja → .tpl with op:// refs)
+  ansible.builtin.template:
+    src: "{{ item.template }}"
+    dest: "{{ render_dir }}/{{ item.template }}"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  loop: "{{ secret_config_files }}"
+  loop_control:
+    label: "{{ item.template }}"
+
+- name: Inject secrets into config templates via `op inject` (local)
+  ansible.builtin.command:
+    cmd: >-
+      op inject
+      -i {{ render_dir }}/{{ item.template }}
+      -o {{ render_dir }}/{{ item.dest | basename }}
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  loop: "{{ secret_config_files }}"
+  loop_control:
+    label: "{{ item.template }}"
+  changed_when: false
+  no_log: true
+
+- name: Ensure parent directories exist for secret config files on droplet
+  ansible.builtin.file:
+    path: "{{ droplet_secrets_dir }}/{{ item.dest | dirname }}"
+    state: directory
+    owner: ops
+    group: ops
+    mode: "0750"
+  loop: "{{ secret_config_files }}"
+  loop_control:
+    label: "{{ item.dest | dirname }}"
+
+- name: Ship rendered secret config files to droplet
+  ansible.builtin.copy:
+    src: "{{ render_dir }}/{{ item.dest | basename }}"
+    dest: "{{ droplet_secrets_dir }}/{{ item.dest }}"
+    mode: "0600"
+    owner: ops
+    group: ops
+  loop: "{{ secret_config_files }}"
+  loop_control:
+    label: "{{ item.dest }}"
+  notify: "Restart {{ item.service }}"
+  no_log: true
+
 - name: Render top-level .env on droplet (no secrets — versions + DOMAIN)
   ansible.builtin.template:
     src: env.tpl
