@@ -32,7 +32,7 @@
 | 9 | Observability stack: dashboards, rules, Alertmanager config | [CLAUDE CODE] | 1 session | Grafana provisioning, Prometheus rules copied from `./infra/services/`, Alertmanager routes |
 | 10 | Telegram-namespace apps (crashers-bot, home-exporter) + Ofelia schedules | [CLAUDE CODE] | 1 session | `compose.telegram.yml`, two env templates, Ofelia labels |
 | 11 | `cash-track/.github` reusable workflows | [CLAUDE CODE] + **[OPERATOR-ONLY]** repo creation + Tailscale ACL edit | 1 session | `ship-service.yml`, `ansible-apply.yml`, quality workflows |
-| 12 | Service-repo `release.yml` updates (api, gateway, frontend, website, crashers-bot, home-exporter) | [CLAUDE CODE] | 1 session | 6 release workflows calling org reusable |
+| 12 | Service-repo `release.yml` updates (api, gateway, frontend, website) | [CLAUDE CODE] | 1 session | 4 release workflows calling org reusable. crashers-bot / home-exporter live outside the cash-track org and are out of scope. |
 | 13 | Disable old K8s workflows (step 1: `workflow_dispatch`) | [CLAUDE CODE] | 1 session | Modified `deploy*.yml` triggers |
 | 14 | Cutover window (Section 16) | **[OPERATOR-ONLY]** | N/A | DNS flipped, K8s writers at 0 replicas |
 | 15 | 48h observation + decommission: tear down DOKS, move workflows to `workflows.disabled/`, rewrite README | **[OPERATOR-ONLY]** + [CLAUDE CODE] for README | 1 session | K8s deleted, new `README.md`, `README-kubernetes.md` |
@@ -953,7 +953,9 @@ Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_
    ```yaml
    services:
      crashers-bot:
-       image: cashtrack/crashers-bot:${VERSION_CRASHERS_BOT}
+       # Source repo is outside the cash-track GitHub org — image lives in the
+       # personal `vovanms/*` Docker Hub namespace, pulled anonymously.
+       image: vovanms/crashers_bot_api:${VERSION_CRASHERS_BOT}
        restart: unless-stopped
        networks: [app]
        env_file: [secrets/crashers-bot.env]
@@ -967,7 +969,8 @@ Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_
        mem_reservation: 128m
 
      home-exporter:
-       image: cashtrack/home-exporter:${VERSION_HOME_EXPORTER}
+       # Same as above — external repo, public Docker Hub image.
+       image: vovanms/home_exporter:${VERSION_HOME_EXPORTER}
        restart: unless-stopped
        networks: [app]
        env_file: [secrets/home-exporter.env]
@@ -1066,7 +1069,9 @@ Tell operator: *"Stage 11 committed. Please create the GitHub repo if not alread
 
 **Goal:** Point each service repo's release workflow at the new org reusable `ship-service.yml`. Retire per-repo K8s deploy plumbing.
 
-**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`, `cash-track/crashers-bot`, `cash-track/home-exporter` (confirm the actual repo names at task start — they may live under a different org or have prefixes).
+**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`.
+
+**Out of scope:** `crashers-bot` and `home-exporter` live in repos outside the `cash-track` GitHub org (Docker Hub namespace `vovanms/*`). They release on their own cadence; the operator bumps `versions.crashers_bot` / `versions.home_exporter` in `infra/ansible/group_vars/all/main.yml` and pushes to `cash-track/infra` to redeploy. They do not consume the org reusable `ship-service.yml` workflow.
 
 ### Action items
 
@@ -1093,7 +1098,7 @@ For each repo, in a local clone:
 
 ### Verification checklist
 
-- [ ] Each of the 5 service repos has a new `release.yml` of ≤ 20 lines.
+- [ ] Each of the 4 service repos (api, gateway, frontend, website) has a new `release.yml` of ≤ 20 lines.
 - [ ] The old `release.yml` (if it did K8s deploys directly) is removed or replaced.
 - [ ] `actionlint` clean in each repo.
 - [ ] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image and SSHes to the droplet via Tailscale — but do not run migrations on scratch. This is the CI smoke test before cutover.

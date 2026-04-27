@@ -2,9 +2,13 @@ name: cashtrack
 
 # Telegram-namespace apps. crashers-bot is a Laravel HTTP bot (Telegram webhook
 # receiver + scheduler); home-exporter is a Prometheus-style exporter that
-# ICMP-pings remote hosts and reports state to Telegram. Both keep the K8s
-# `telegram-bots` namespace separation 1:1 so per-app image releases stay
-# independent.
+# ICMP-pings remote hosts and reports state to Telegram. Both source repos live
+# outside the cash-track GitHub org, so their images are pulled from the upstream
+# `vovanms/*` Docker Hub namespace (public, no imagePullSecrets — matches the
+# K8s deployments). The cash-track org-level release workflow (Stage 11/12) does
+# NOT manage these images; the operator bumps `versions.crashers_bot` /
+# `versions.home_exporter` in `group_vars/all/main.yml` when a new upstream tag
+# ships.
 
 networks:
   app:
@@ -13,7 +17,7 @@ networks:
 
 services:
   crashers-bot:
-    image: cashtrack/crashers-bot:${VERSION_CRASHERS_BOT}
+    image: vovanms/crashers_bot_api:${VERSION_CRASHERS_BOT}
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/crashers-bot.env]
@@ -43,7 +47,7 @@ services:
     oom_score_adj: -100
 
   home-exporter:
-    image: cashtrack/home-exporter:${VERSION_HOME_EXPORTER}
+    image: vovanms/home_exporter:${VERSION_HOME_EXPORTER}
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/home-exporter.env]

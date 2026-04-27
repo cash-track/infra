@@ -1040,10 +1040,16 @@ GitHub org: cash-track
 │       ├── replace-droplet.yml      # NEW — workflow_dispatch
 │       └── bootstrap.yml            # NEW — workflow_dispatch
 │
-├── api, gateway, frontend, website, crashers-bot, home-exporter
+├── api, gateway, frontend, website
 │   └── .github/workflows/
 │       ├── quality.yml              # calls org reusable quality-*.yml
 │       └── release.yml              # calls org reusable ship-service.yml on tag
+│
+# crashers-bot and home-exporter live in repos outside the cash-track org
+# (images at `vovanms/crashers_bot_api`, `vovanms/home_exporter` on Docker Hub).
+# They are NOT consumers of the org reusable workflows — their images get pulled
+# anonymously by the droplet, and `versions.crashers_bot` / `versions.home_exporter`
+# in `infra/ansible/group_vars/all/main.yml` is bumped by hand to redeploy.
 ```
 
 ### Org secrets (scoped to selected repos)
