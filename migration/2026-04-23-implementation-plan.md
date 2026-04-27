@@ -1069,7 +1069,9 @@ Tell operator: *"Stage 11 committed. Please create the GitHub repo if not alread
 
 **Goal:** Point each service repo's release workflow at the new org reusable `ship-service.yml`. Retire per-repo K8s deploy plumbing.
 
-**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`.
+**Repos to update:** `cash-track/api`, `cash-track/gateway`, `cash-track/frontend`, `cash-track/website`, `cash-track/mysql`, `cash-track/redis`, `cash-track/mysql-backup`.
+
+The infra images (`mysql`, `redis`, `mysql-backup`) ship through the same `ship-service.yml`. Their compose entries reference `${VERSION_MYSQL}`, `${VERSION_REDIS}`, `${VERSION_MYSQL_BACKUP}` — keys already present in the rendered `/opt/cashtrack/.env`. The deploy-service script's `${SERVICE^^}` + `-`→`_` mapping resolves the service name to the right env var. None take `run_migrations`. Tag a release in each repo (e.g. `v1.0.9` on `cash-track/mysql`) and `release.yml` triggers the same way as the app repos.
 
 **Deferred (not impossible):** `crashers-bot` and `home-exporter` live in repos outside the `cash-track` GitHub org (`vokomarov/*` on GitHub, `vovanms/*` on Docker Hub). For cutover they stay on the manual path — the operator bumps `versions.crashers_bot` / `versions.home_exporter` in `infra/ansible/group_vars/all/main.yml` and pushes to `cash-track/infra` to redeploy. Folding them onto the org reusable workflow is post-cutover work tracked in **Future work: Bot repo workflow consolidation** at the bottom of this document — the migration there is intentionally deferred to keep cutover scope narrow, not abandoned.
 
@@ -1098,8 +1100,8 @@ For each repo, in a local clone:
 
 ### Verification checklist
 
-- [ ] Each of the 4 service repos (api, gateway, frontend, website) has a new `release.yml` of ≤ 20 lines.
-- [ ] The old `release.yml` (if it did K8s deploys directly) is removed or replaced.
+- [ ] Each of the 7 service repos (api, gateway, frontend, website, mysql, redis, mysql-backup) has a new `release.yml` of ≤ 20 lines.
+- [ ] The old `release.yml` / `build.yml` (if it built and pushed directly, or did K8s deploys) is removed or replaced.
 - [ ] `actionlint` clean in each repo.
 - [ ] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image and SSHes to the droplet via Tailscale — but do not run migrations on scratch. This is the CI smoke test before cutover.
 
