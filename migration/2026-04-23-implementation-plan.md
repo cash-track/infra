@@ -1050,9 +1050,9 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
 
 ### Verification checklist
 
-- [ ] `cash-track/.github` repo exists with 5 workflow files.
+- [x] `cash-track/.github` repo exists with 5 workflow files.
 - [x] Tailscale admin → ACLs → validate JSON, save.
-- [ ] `ship-service.yml` passes `actionlint`.
+- [x] `ship-service.yml` passes `actionlint`.
 - [ ] Claude Code reviews (but does not submit) the PR before operator merges.
 
 ### Commit (in `cash-track/.github` repo)
