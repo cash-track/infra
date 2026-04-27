@@ -3,25 +3,25 @@
 # no normalization. If a release is published as `v1.2.9`, that exact string is
 # the tag both in `.env` and in `docker pull cashtrack/api:v1.2.9`.
 versions:
-  api:           "1.2.9"
-  gateway:       "1.2.9"
-  frontend:      "1.1.4"
-  website:       "0.1.14"
-  mysql:         "1.0.8"
-  mysql_backup:  "0.0.5"
-  redis:         "1.0.1"
-  crashers_bot:  "1.0.0"
+  api: "1.2.9"
+  gateway: "1.2.9"
+  frontend: "1.1.4"
+  website: "0.1.14"
+  mysql: "1.0.8"
+  mysql_backup: "0.0.5"
+  redis: "1.0.1"
+  crashers_bot: "1.0.0"
   home_exporter: "1.0.0"
 
 retention:
   prometheus: "7d"
-  loki:       "168h"
-  tempo:      "72h"
+  loki: "168h"
+  tempo: "72h"
 
 backups:
   spaces_endpoint: "ams3.digitaloceanspaces.com"
-  spaces_bucket:   "cash-track-backups"
-  schedule_cron:   "0 0 3 * * *"
+  spaces_bucket: "cash-track-backups"
+  schedule_cron: "0 0 3 * * *"
 
 # Compose files rendered/used by the compose-* roles (paths under /opt/cashtrack).
 # Stage 4 fills these out; Stage 5 wires them into compose-up.

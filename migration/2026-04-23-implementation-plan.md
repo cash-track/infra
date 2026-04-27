@@ -661,7 +661,7 @@ No operator action. Proceed to Stage 5.
 ### Verification checklist
 
 - [x] `ansible-playbook site.yml --syntax-check` passes (also for `deploy.yml`, `replace-droplet.yml`, all four `ops/*.yml`).
-- [x] `ansible-lint ansible/` clean at the **production** profile (0 failures, 0 warnings across 21 files).
+- [x] `ansible-lint ansible/` clean at the **production** profile (0 failures, 0 warnings across 23 files).
 - [x] Every `op://` reference in `.env.tpl` files resolves syntactically — templates are pure Jinja-formed `op://cash-track-prod/<item>/<field>` URIs, no missing pieces.
 - [x] `no_log: true` appears on every task that processes a secret. Audited via grep + per-task scan of `roles/mysql-init/tasks/main.yml`, `roles/compose-render/tasks/main.yml`, `ops/backup-restore.yml` — every task that touches an `op read`, `op inject`, MYSQL root password, or rendered `.env` body carries `no_log: true`.
 - [x] `deploy-service` script clean. `shellcheck` not installed locally; fell back to `bash -n` (parse-clean). Run `shellcheck ansible/roles/compose-up/files/deploy-service` in CI when available.
@@ -673,6 +673,7 @@ No operator action. Proceed to Stage 5.
 - `deploy-service` ships from `roles/compose-up/files/deploy-service` (not `ansible/bin/deploy-service` as in the plan's "Files" sketch) — keeps it co-located with the role that installs it.
 - `mysql-init` talks to mysql via `docker exec` rather than `community.mysql.mysql_db` (mysql container does not publish 3306 on the host; `docker exec` avoids adding a network surface or pymysql installation requirement).
 - Site role order is `compose-render → compose-up → mysql-init` (compose-up must run first so the mysql container exists for mysql-init to exec into; compose-render must run before compose-up so `secrets/mysql.env` exists for the container).
+- `group_vars/all/main.yml` aligned-colon dict literals (`api:           "1.2.9"`, etc.) tripped `yaml[colons]` at the production profile after stage 4 added a few more files — collapsed every `versions:`/`retention:`/`backups:` entry to a single space after the colon to satisfy `ansible-lint`.
 
 ### Commit
 
