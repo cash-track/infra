@@ -1,0 +1,131 @@
+# Service-level rules — translated from the K8s rule set at
+# infra/services/prometheus/configs/rules.yml. K8s-specific selectors
+# (kube_pod_status_ready, nginx_ingress_controller_*, kube_pod_status_phase)
+# are rewritten against the Compose stack's actual scrape jobs:
+#
+#   prometheus.yml jobs: prometheus, traefik, node-exporter, mysql-exporter,
+#                        ofelia, api, gateway, loki, tempo, alertmanager,
+#                        promtail, grafana
+#
+# Frontend/website expose no metrics endpoint — their availability is covered
+# by the HTTP-error-rate alerts (Traefik service metrics) and the external
+# Cloudflare/GH-Action probe per design §15.
+
+groups:
+  - name: service.rules
+    rules:
+
+      # ─── Service availability (replaces *PodDown alerts) ─────────────────
+
+      - alert: ApiDown
+        expr: up{job="api"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "API target is down"
+          description: "Prometheus has been unable to scrape `api:2112` for >5m. Check `docker compose logs api`."
+
+      - alert: GatewayDown
+        expr: up{job="gateway"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Gateway target is down"
+          description: "Prometheus has been unable to scrape `gateway:8081` for >5m. Check `docker compose logs gateway`."
+
+      - alert: MySQLExporterDown
+        expr: up{job="mysql-exporter"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "MySQL exporter is down (database health unknown)"
+          description: "Either mysql-exporter or mysql itself is unhealthy. Check `docker compose ps mysql mysql-exporter`."
+
+      - alert: TraefikDown
+        expr: up{job="traefik"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Traefik metrics endpoint is down"
+          description: "Without Traefik no public traffic flows. Check `docker compose logs traefik`."
+
+      - alert: PrometheusTargetMissing
+        expr: up == 0
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) has been down for 15m"
+          description: "Investigate the listed container; if intentionally removed, drop the scrape job from prometheus.yml."
+
+      # ─── HTTP error / latency (Traefik service metrics) ──────────────────
+      # Traefik's Docker provider names services `<container>@docker`.
+
+      - alert: HTTPServiceHighServerErrorRate
+        expr: |
+          round(
+            (
+              sum by (service) (rate(traefik_service_requests_total{service=~"api@docker|gateway@docker|website@docker|frontend@docker", code=~"5.."}[2m]))
+              /
+              sum by (service) (rate(traefik_service_requests_total{service=~"api@docker|gateway@docker|website@docker|frontend@docker"}[2m]))
+            ) * 100
+          ) > 20
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HTTP service {{ $labels.service }} 5xx rate {{ $value }}%"
+          description: "{{ $labels.service }} returned 5xx for >20% of requests over the last 5m."
+
+      - alert: HTTPServiceHighClientErrorRate
+        expr: |
+          round(
+            (
+              sum by (service) (rate(traefik_service_requests_total{service=~"api@docker|gateway@docker|website@docker|frontend@docker", code=~"4..", code!="404"}[2m]))
+              /
+              sum by (service) (rate(traefik_service_requests_total{service=~"api@docker|gateway@docker|website@docker|frontend@docker"}[2m]))
+            ) * 100
+          ) > 80
+        for: 5m
+        labels:
+          severity: info
+        annotations:
+          summary: "HTTP service {{ $labels.service }} 4xx rate {{ $value }}%"
+          description: "{{ $labels.service }} returned non-404 4xx for >80% of requests over the last 5m. Often a client misconfiguration; verify before paging."
+
+      - alert: HTTPServiceHighResponseLatency
+        expr: |
+          histogram_quantile(
+            0.90,
+            sum by (service, le) (rate(traefik_service_request_duration_seconds_bucket{service=~"api@docker|gateway@docker|website@docker|frontend@docker"}[2m]))
+          ) > 1
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "HTTP service {{ $labels.service }} p90 latency {{ $value }}s"
+          description: "{{ $labels.service }} p90 response time has been >1s for 2m."
+
+      # ─── Host resource pressure (replaces NodeHigh*Request alerts) ──────
+
+      - alert: NodeHighCPUUsage
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 90
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} CPU usage {{ $value }}%"
+          description: "CPU usage has averaged >90% for 30m. Consider resizing the droplet or trimming hot services."
+
+      - alert: NodeHighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Node {{ $labels.instance }} memory usage {{ $value }}%"
+          description: "Available memory has been <10% of total for 30m. Inspect per-container `mem_limit` and resize the droplet if sustained."

@@ -909,9 +909,9 @@ Operator confirms: *"Stage 8 done. App services live internally with restored da
 
 ### Verification checklist
 
-- [ ] `promtool check rules compose/config/prometheus/rules/*.yml` passes.
-- [ ] `amtool check-config compose/config/alertmanager/alertmanager.yml` passes.
-- [ ] `jq . compose/config/grafana/provisioning/dashboards/json/*.json` — all JSONs parse.
+- [x] `promtool check rules compose/config/prometheus/rules/*.yml` passes — `host.yml` (6 rules), `service.yml` (10 rules), `tempo.yml` (26 rules); `promtool check config compose/config/prometheus/prometheus.yml` also passes (rule-files glob picks up all three).
+- [~] `amtool check-config compose/config/alertmanager/alertmanager.yml` — fails on the literal file because Stage 4 wired `bot_token` / `chat_id` as `'{{ env "..." }}'` strings, but Alertmanager does **not** expand env vars in YAML config keys (templating is only valid inside `message` rendering). Routing/inhibit structure is verified by re-running amtool against the file with placeholder secrets substituted — `SUCCESS: 1 route, 3 inhibit rules, 1 receiver, 1 template`. **Operator/Stage 4 follow-up:** switch `bot_token` to `bot_token_file` (file rendered by `compose-render`) and inline `chat_id` as a plain integer rendered into the YAML by Ansible (or wrap with an `envsubst` entrypoint) before Stage 14 cutover.
+- [x] `jq . compose/config/grafana/provisioning/dashboards/json/*.json` — all 22 JSONs parse.
 - [ ] After redeploy (`make deploy` — operator), Grafana (via `tailscale serve` or port-forward) shows dashboards in the "Cashtrack" folder.
 - [ ] Operator fires a test alert: `docker compose exec alertmanager amtool alert add alertname=TestAlert severity=warning` — Telegram receives the message within 30s.
 
@@ -921,7 +921,7 @@ Operator confirms: *"Stage 8 done. App services live internally with restored da
 
 ### Handoff
 
-Tell operator: *"Stage 9 committed. Please run `make deploy` to pick up the new Prometheus rules and dashboards, then fire the test alert per the checklist."*
+Tell operator: *"Stage 9 committed. Heads-up: Stage 4 wired `bot_token` / `chat_id` in `alertmanager.yml` as `{{ env "..." }}` template literals — Alertmanager doesn't expand env vars in YAML keys, so `amtool check-config` fails on the literal file (routing/inhibit structure verified independently with placeholders). Fix that before `make deploy`, then run `make deploy` to pick up the new Prometheus rules and dashboards, then fire the test alert per the checklist."*
 
 ---
 

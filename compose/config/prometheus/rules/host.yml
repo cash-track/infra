@@ -1,0 +1,74 @@
+# Host-class rules — fire earlier than service health checks for droplet-scope
+# failures (memory pressure, pending reboot, backup staleness, IO saturation).
+# Authored from design §15.
+
+groups:
+  - name: host.rules
+    rules:
+      # Memory pressure — early warning before OOM.
+      # PSI "some" > 10% sustained for 2 min = tasks stalling on memory reclaim.
+      - alert: HostMemoryPressure
+        expr: rate(node_pressure_memory_waiting_seconds_total[2m]) > 0.10
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Memory pressure on {{ $labels.instance }} (PSI {{ $value | humanizePercentage }})"
+          description: "Tasks on {{ $labels.instance }} have been stalling on memory reclaim above 10% PSI for 2m. Investigate workload growth or bump droplet size."
+
+      # Kernel/library patch installed, reboot pending. Scheduled 04:00 UTC
+      # window should clear this within 24h; fires if the reboot didn't happen
+      # (e.g., long-running process blocked shutdown, or unattended-upgrades misfired).
+      - alert: HostRebootRequired
+        expr: node_reboot_required == 1
+        for: 7d
+        labels:
+          severity: warning
+        annotations:
+          summary: "Droplet {{ $labels.instance }} has had a pending reboot for >7 days — scheduled window missed"
+          description: "Manual reboot needed; the unattended-upgrades automatic reboot window did not run successfully."
+
+      # Backup freshness — primary defense against the `make replace` preflight
+      # ever firing during an incident. Catch stale backups before you need them.
+      - alert: MySQLBackupStale
+        expr: time() - mysql_backup_last_success_timestamp_seconds > 6 * 3600
+        for: 15m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Last successful MySQL backup is {{ $value | humanizeDuration }} old (expected cadence 3h)"
+          description: "mysql-backup container is failing to push to Spaces, or node-exporter textfile collector is not picking up the freshness marker. Inspect mysql-backup logs and /var/lib/node_exporter/textfile_collector/."
+
+      # Disk I/O saturation — proxy for the Block Volume contention risk flagged
+      # in design §19. Investigate if it stays saturated (MySQL tuning, Loki/Prom
+      # retention caps, or escalate to storage split per §21).
+      - alert: BlockVolumeIOPSSaturated
+        expr: rate(node_disk_io_time_seconds_total{device=~"sda|vda|sd.|vd."}[5m]) > 0.80
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Block Volume IO utilization >80% sustained on {{ $labels.instance }} ({{ $labels.device }})"
+          description: "Sustained disk saturation; review concurrent workloads (MySQL, Loki compactor, Prometheus WAL flush, mysql-backup window)."
+
+      # Filesystem capacity — Block Volume mounted at /mnt/data carries MySQL +
+      # observability stack data. Catch growth before it stalls writes.
+      - alert: HostDataVolumeFull
+        expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/mnt/data"} * 100) / node_filesystem_size_bytes{mountpoint="/mnt/data"})) > 90
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Data volume on {{ $labels.instance }} is {{ $value }}% full"
+          description: "/mnt/data nearly full — review Loki/Prom/Tempo retention, MySQL growth, then resize the Block Volume in Terraform (size_in_gb) and rerun apply."
+
+      # Root filesystem — droplet OS partition. Should be quiet; if it grows,
+      # Docker image bloat or a runaway log under /var/log is the usual culprit.
+      - alert: HostRootDiskFull
+        expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/"} * 100) / node_filesystem_size_bytes{mountpoint="/"})) > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Root filesystem on {{ $labels.instance }} is {{ $value }}% full"
+          description: "Investigate /var/lib/docker, /var/log; `docker system prune -af` if image cache bloated."

@@ -16,10 +16,25 @@ route:
   group_interval: 5m
   repeat_interval: 30m
   routes:
+    # Critical: page faster (re-send every 15m until resolved).
     - matchers:
         - severity = "critical"
       receiver: telegram
+      group_wait: 0s
       repeat_interval: 15m
+      continue: false
+    # Warning: default cadence inherited from root, kept explicit for clarity.
+    - matchers:
+        - severity = "warning"
+      receiver: telegram
+      repeat_interval: 30m
+      continue: false
+    # Info: low-noise channel — re-send only every 6h.
+    - matchers:
+        - severity = "info"
+      receiver: telegram
+      repeat_interval: 6h
+      continue: false
 
 receivers:
   - name: telegram
@@ -31,7 +46,16 @@ receivers:
         message: '{{ template "telegram.cash-track.message" . }}'
         send_resolved: true
 
+# Suppress lower-severity duplicates of the same alert on the same instance
+# (e.g. silence HostMemoryPressure warning while a NodeHighMemoryUsage critical
+# is firing for the same droplet).
 inhibit_rules:
   - source_matchers: [severity = "critical"]
     target_matchers: [severity = "warning"]
+    equal: ["alertname", "instance"]
+  - source_matchers: [severity = "critical"]
+    target_matchers: [severity = "info"]
+    equal: ["alertname", "instance"]
+  - source_matchers: [severity = "warning"]
+    target_matchers: [severity = "info"]
     equal: ["alertname", "instance"]
