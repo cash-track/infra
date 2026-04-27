@@ -756,10 +756,11 @@ No operator action. Proceed to Stage 6.
 
 ### Verification checklist
 
-- [ ] `shellcheck scripts/*.sh` clean.
-- [ ] `make -n plan` (dry-run) prints the expected terraform invocation.
-- [ ] `make -n replace` shows preflight + replace + bootstrap in order.
-- [ ] `scripts/replace-preflight.sh` refuses to run without `FORCE_REPLACE_REASON` when backup stale — Claude can unit-test this by mocking the `aws s3 ls` output: `FORCE_REPLACE_REASON=test ./scripts/replace-preflight.sh` should proceed; `./scripts/replace-preflight.sh` alone with a stale mock should exit 1.
+- [x] `shellcheck scripts/*.sh` clean. *(shellcheck not installed locally per CLAUDE.md; substituted `bash -n scripts/*.sh` parse check — all three scripts parse OK.)*
+- [x] `make -n plan` (dry-run) prints the expected terraform invocation. → `terraform -chdir=terraform plan`.
+- [x] `make -n replace` shows preflight + replace + bootstrap in order. → `./scripts/replace-preflight.sh` → `terraform -chdir=terraform apply -replace='digitalocean_droplet.host[0]' -auto-approve` → `cd ansible && ansible-playbook site.yml`.
+- [x] `scripts/replace-preflight.sh` refuses to run without `FORCE_REPLACE_REASON` when backup stale. Verified with three mocked-`aws` runs: stale + no override → exit 1; stale + `FORCE_REPLACE_REASON` + telegram mock → exit 0; fresh backup → exit 0. `AWS_BIN` / `CURL_BIN` env hooks in the script make this reproducible without real Spaces creds.
+- [x] `ansible-lint` clean across all playbooks (`production` profile, 21 files including `ops/backup-restore.yml` after adding `verify_only` mode).
 
 ### Commit
 

@@ -13,6 +13,11 @@
 # Usage:
 #   ansible-playbook ops/backup-restore.yml -e backup_id=cashtrack-2026-04-25.sql.gz
 #   ansible-playbook ops/backup-restore.yml -e backup_id=latest
+#   ansible-playbook ops/backup-restore.yml -e backup_id=latest -e verify_only=true
+#
+# `verify_only=true` resolves the latest object, prints its key + age, and
+# exits without touching MySQL. Wired up to `make backup-verify` for
+# day-to-day "is the backup chain still alive?" checks.
 
 - name: Restore MySQL backup
   hosts: prod
@@ -39,11 +44,14 @@
           the live MySQL on {{ inventory_hostname }}. This OVERWRITES tables.
           Type 'restore' to continue, anything else to abort.
       register: restore_confirm
+      when: not (verify_only | default(false) | bool)
 
     - name: Abort if not confirmed
       ansible.builtin.fail:
         msg: "Operator did not confirm — aborting."
-      when: restore_confirm.user_input | default('') != 'restore'
+      when:
+        - not (verify_only | default(false) | bool)
+        - restore_confirm.user_input | default('') != 'restore'
   tasks:
     - name: Resolve `latest` to a concrete object key
       ansible.builtin.shell: |
@@ -61,6 +69,29 @@
       ansible.builtin.set_fact:
         resolved_backup: >-
           {{ latest_key_lookup.stdout if backup_id == 'latest' else backup_id }}
+
+    - name: Read backup object metadata for verify_only mode
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+          aws --endpoint-url={{ s3_endpoint }} s3 ls "s3://{{ bucket }}/{{ resolved_backup }}"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      register: verify_listing
+      changed_when: false
+      when: verify_only | default(false) | bool
+
+    - name: Verify-only summary
+      ansible.builtin.debug:
+        msg:
+          - "verify_only=true — skipping restore."
+          - "resolved key: {{ resolved_backup }}"
+          - "object listing: {{ verify_listing.stdout | default('(unknown)') }}"
+      when: verify_only | default(false) | bool
+
+    - name: End play in verify_only mode
+      ansible.builtin.meta: end_play
+      when: verify_only | default(false) | bool
 
     - name: Pre-restore row counts
       ansible.builtin.shell: |
