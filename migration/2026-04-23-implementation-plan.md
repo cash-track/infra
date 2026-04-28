@@ -1040,7 +1040,7 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
    ```
    Apply in Tailscale admin → Access Controls.
 3. **[CLAUDE CODE] Write workflows in a local clone of `cash-track/.github`:**
-   - `.github/workflows/build.yml` — reusable build + push. Tags derived via `docker/metadata-action@v5` (`type=sha` + `type=semver,pattern={{version}}`, `flavor: latest=auto`) so `v1.2.9` becomes `cashtrack/<name>:1.2.9` + `:sha-<short>` + (when highest) `:latest`. Outputs `version` so the chained deploy passes the same tag the build pushed. Buildx + GHA cache, optional build-args, SLSA provenance attestation.
+   - `.github/workflows/build.yml` — reusable build + push. Tags derived via `docker/metadata-action@v5` (`type=sha` + `type=semver,pattern={{version}}`, `flavor: latest=auto`) so `v1.2.9` becomes `cashtrack/<name>:1.2.9` + `:sha-<short>` + (when highest) `:latest`. Outputs `version` so the chained deploy passes the same tag the build pushed. `build_args` defaults to `GIT_COMMIT` + `GIT_TAG` for image provenance. Buildx + GHA cache, SLSA provenance attestation.
    - `.github/workflows/deploy.yml` — reusable tailnet-join + SSH `deploy-service` runner. Callable independently for rollback (`workflow_dispatch -f tag=v1.2.8`).
    - `.github/workflows/ansible-apply.yml` — reusable workflow; installs `op` CLI via `1password/install-cli-action@v1`, clones `infra`, runs `ansible-playbook site.yml` with `OP_SERVICE_ACCOUNT_TOKEN`.
    - `.github/workflows/quality-go.yml` — reusable for the gateway repo (go vet, go test -race, golangci-lint).
@@ -1093,9 +1093,6 @@ For each repo, in a local clone:
        uses: cash-track/.github/.github/workflows/build.yml@main
        with:
          image: cashtrack/<name>
-         build_args: |
-           GIT_COMMIT=${{ github.sha }}
-           GIT_TAG=${{ github.ref_name }}
        secrets: inherit
      deploy:
        needs: build

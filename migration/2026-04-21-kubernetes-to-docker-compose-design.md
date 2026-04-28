@@ -1093,7 +1093,7 @@ on:
       dockerfile: { required: false, type: string,  default: "Dockerfile" }
       tag_rules:  { required: false, type: string,  default: "type=sha\ntype=semver,pattern={{version}}" }
       flavor:     { required: false, type: string,  default: "latest=auto" }
-      build_args: { required: false, type: string,  default: "" }
+      build_args: { required: false, type: string,  default: "GIT_COMMIT=${{ github.sha }}\nGIT_TAG=${{ github.ref_name }}" }
       attest:     { required: false, type: boolean, default: true }
     secrets:
       DOCKERHUB_USERNAME: { required: true }
@@ -1202,9 +1202,6 @@ jobs:
     uses: cash-track/.github/.github/workflows/build.yml@main
     with:
       image: cashtrack/api
-      build_args: |
-        GIT_COMMIT=${{ github.sha }}
-        GIT_TAG=${{ github.ref_name }}
     secrets: inherit
 
   deploy:
@@ -1216,6 +1213,11 @@ jobs:
       run_migrations: true
     secrets: inherit
 ```
+
+`build.yml` injects `GIT_COMMIT=${{ github.sha }}` and `GIT_TAG=${{ github.ref_name }}` as
+default build args so Dockerfiles can stamp the image with provenance metadata. Repos that
+don't `ARG` them in their Dockerfile silently ignore them; repos that need additional build
+args override `build_args:` and re-specify these defaults if they still want them.
 
 Every service repo's `release.yml` is the same shape — only `service`, `image`, and `run_migrations` vary. The repo also keeps a `build.yml` (`workflow_dispatch` → `build.yml@main`) for manual rebuild (operator passes `--ref` to dispatch a specific tag/branch/SHA) and a `deploy.yml` (`workflow_dispatch` → `deploy.yml@main`) for rollback to a known-good tag (passed as the bare version, e.g. `1.2.8`).
 
