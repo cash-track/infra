@@ -1025,7 +1025,8 @@ Operator laptop authenticates to 1Password via the normal desktop app + `op sign
 GitHub org: cash-track
 ├── .github                          # NEW — reusable workflows
 │   └── .github/workflows/
-│       ├── ship-service.yml         # reusable: build → push → deploy
+│       ├── build.yml                # reusable: build + push image
+│       ├── deploy.yml               # reusable: tailnet + ssh deploy-service
 │       ├── ansible-apply.yml        # reusable: run a playbook
 │       ├── quality-go.yml
 │       ├── quality-php.yml
@@ -1040,10 +1041,12 @@ GitHub org: cash-track
 │       ├── replace-droplet.yml      # NEW — workflow_dispatch
 │       └── bootstrap.yml            # NEW — workflow_dispatch
 │
-├── api, gateway, frontend, website
+├── api, gateway, frontend, website, mysql, redis, mysql-backup
 │   └── .github/workflows/
-│       ├── quality.yml              # calls org reusable quality-*.yml
-│       └── release.yml              # calls org reusable ship-service.yml on tag
+│       ├── quality.yml              # calls org reusable quality-*.yml (app repos only)
+│       ├── build.yml                # workflow_dispatch — calls org reusable build.yml
+│       ├── deploy.yml               # workflow_dispatch — calls org reusable deploy.yml (rollback)
+│       └── release.yml              # tag push — chains build.yml → deploy.yml
 │
 # crashers-bot and home-exporter live in repos outside the cash-track org
 # (images at `vovanms/crashers_bot_api`, `vovanms/home_exporter` on Docker Hub).
@@ -1062,32 +1065,48 @@ GitHub org: cash-track
 | `SPACES_TFSTATE_ID`, `SPACES_TFSTATE_KEY` | `infra` only | Terraform state access |
 | `OPS_SSH_PRIVATE_KEY` | — not needed — | Auth via Tailscale SSH instead |
 
-### `ship-service.yml` (reusable, in `cash-track/.github`)
+### `build.yml` and `deploy.yml` (reusable, in `cash-track/.github`)
+
+The release pipeline is split into two reusables — `build.yml` (build + push) and `deploy.yml`
+(tailnet + ssh `deploy-service`) — to mirror the existing per-repo structure (`build.yml`,
+`deploy.yml`, `release.yml`). Splitting matters because:
+
+- Tag push auto-builds → pushes → deploys via a chained `release.yml` in the service repo.
+- Rebuild without redeploy (cache invalidation, base-image refresh) calls `build.yml` directly.
+- Redeploy without rebuild (rollback) calls `deploy.yml` directly with the older tag, pulling
+  the existing image off Docker Hub. A combined "ship" workflow would force a rebuild for every
+  rollback, breaking the deterministic-image guarantee.
+
+`build.yml` (build + push only):
 
 ```yaml
-name: Ship service
+name: Build
 on:
   workflow_call:
     inputs:
-      service:        { required: true, type: string }
-      image:          { required: true, type: string }
-      tag:            { required: true, type: string }
-      context:        { required: false, type: string, default: "." }
-      dockerfile:     { required: false, type: string, default: "Dockerfile" }
-      run_migrations: { required: false, type: boolean, default: false }
+      image:        { required: true,  type: string }
+      tag:          { required: true,  type: string }
+      context:      { required: false, type: string,  default: "." }
+      dockerfile:   { required: false, type: string,  default: "Dockerfile" }
+      push_latest:  { required: false, type: boolean, default: true }
+      build_args:   { required: false, type: string,  default: "" }
+      attest:       { required: false, type: boolean, default: true }
     secrets:
-      DOCKERHUB_USERNAME:     { required: true }
-      DOCKERHUB_TOKEN:        { required: true }
-      TS_OAUTH_CLIENT_ID:     { required: true }
-      TS_OAUTH_SECRET:        { required: true }
-
-concurrency:
-  group: deploy-${{ inputs.service }}
-  cancel-in-progress: false
+      DOCKERHUB_USERNAME: { required: true }
+      DOCKERHUB_TOKEN:    { required: true }
+    outputs:
+      digest:
+        value: ${{ jobs.build.outputs.digest }}
 
 jobs:
-  build-push:
+  build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -1095,35 +1114,63 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - id: push
+        uses: docker/build-push-action@v6
         with:
           context: ${{ inputs.context }}
-          file: ${{ inputs.dockerfile }}
-          push: true
-          tags: |
-            ${{ inputs.image }}:${{ inputs.tag }}
-            ${{ inputs.image }}:latest
+          file:    ${{ inputs.dockerfile }}
+          push:    true
+          tags:    ${{ inputs.image }}:${{ inputs.tag }}${{ inputs.push_latest && format('\n{0}:latest', inputs.image) || '' }}
+          build-args: ${{ inputs.build_args }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
+      - if: ${{ inputs.attest }}
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name:    docker.io/${{ inputs.image }}
+          subject-digest:  ${{ steps.push.outputs.digest }}
+          push-to-registry: true
+```
 
+`deploy.yml` (tailnet + ssh deploy only):
+
+```yaml
+name: Deploy
+on:
+  workflow_call:
+    inputs:
+      service:        { required: true,  type: string }
+      tag:            { required: true,  type: string }
+      run_migrations: { required: false, type: boolean, default: false }
+      droplet_host:   { required: false, type: string,  default: "cashtrack-prod-0" }
+      droplet_user:   { required: false, type: string,  default: "ops" }
+    secrets:
+      TS_OAUTH_CLIENT_ID: { required: true }
+      TS_OAUTH_SECRET:    { required: true }
+
+concurrency:
+  group: deploy-${{ inputs.service }}
+  cancel-in-progress: false
+
+jobs:
   deploy:
     runs-on: ubuntu-latest
-    needs: build-push
+    environment: prod
     steps:
-      - name: Join tailnet (ephemeral)
-        uses: tailscale/github-action@v3
+      - uses: tailscale/github-action@v3
         with:
           oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
           oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
           tags: tag:ci
-      - name: Deploy service
-        env:
-          TAG: ${{ inputs.tag }}
-          SERVICE: ${{ inputs.service }}
+      - env:
+          SERVICE:        ${{ inputs.service }}
+          TAG:            ${{ inputs.tag }}
           RUN_MIGRATIONS: ${{ inputs.run_migrations }}
+          DROPLET_HOST:   ${{ inputs.droplet_host }}
+          DROPLET_USER:   ${{ inputs.droplet_user }}
         run: |
-          ssh -o StrictHostKeyChecking=accept-new ops@cashtrack-prod-0 \
-            "/opt/cashtrack/bin/deploy-service $SERVICE $TAG $RUN_MIGRATIONS"
+          ssh -o StrictHostKeyChecking=accept-new "${DROPLET_USER}@${DROPLET_HOST}" \
+            "/opt/cashtrack/bin/deploy-service ${SERVICE} ${TAG} ${RUN_MIGRATIONS}"
 ```
 
 No infra checkout. No Ansible on the runner. No vault access. No PAT. SSH auth is Tailscale SSH, keyless — governed by the tailnet ACL granting `tag:ci` identity SSH to `tag:prod-server` as user `ops`.
@@ -1131,23 +1178,33 @@ No infra checkout. No Ansible on the runner. No vault access. No PAT. SSH auth i
 ### Caller in a service repo (`cash-track/api/.github/workflows/release.yml`)
 
 ```yaml
-name: Release
+name: release
 on:
   push:
     tags: ['v*.*.*']
 
 jobs:
-  ship:
-    uses: cash-track/.github/.github/workflows/ship-service.yml@main
+  build:
+    uses: cash-track/.github/.github/workflows/build.yml@main
+    with:
+      image: cashtrack/api
+      tag:   ${{ github.ref_name }}
+      build_args: |
+        GIT_COMMIT=${{ github.sha }}
+        GIT_TAG=${{ github.ref_name }}
+    secrets: inherit
+
+  deploy:
+    needs: build
+    uses: cash-track/.github/.github/workflows/deploy.yml@main
     with:
       service: api
-      image:   cashtrack/api
-      tag:     ${{ github.ref_name }}       # used verbatim as Docker Hub tag
+      tag:     ${{ github.ref_name }}
       run_migrations: true
     secrets: inherit
 ```
 
-Every service repo's release workflow is 9 lines. Only `service`, `image`, and `run_migrations` vary.
+Every service repo's `release.yml` is the same shape — only `service`, `image`, and `run_migrations` vary. The repo also keeps a `build.yml` (`workflow_dispatch` → `build.yml@main`) for manual rebuild and a `deploy.yml` (`workflow_dispatch` → `deploy.yml@main`) for rollback to a known-good tag.
 
 ### The on-droplet deploy script (`/opt/cashtrack/bin/deploy-service`, installed by Ansible)
 
@@ -1185,11 +1242,15 @@ $COMPOSE up -d --no-deps "$SERVICE"
 
 ### Rollback
 
-Rollback is a re-run with an older tag:
+Rollback dispatches the per-repo `deploy.yml` workflow with the older tag — no rebuild, the
+existing image is pulled from Docker Hub:
 
 ```bash
-gh workflow run release.yml --repo cash-track/api -f tag=v1.2.8
+gh workflow run deploy.yml --repo cash-track/api -f tag=v1.2.8
 ```
+
+This is why the release pipeline is split: a combined "ship" workflow would force a rebuild
+on every rollback, defeating the deterministic-image guarantee.
 
 For infra rollbacks, `git revert` + push triggers `ansible-apply.yml` automatically. The retained K8s workflows in `infra` remain available as an emergency escape hatch in the immediate post-cutover period.
 

@@ -1040,7 +1040,8 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
    ```
    Apply in Tailscale admin → Access Controls.
 3. **[CLAUDE CODE] Write workflows in a local clone of `cash-track/.github`:**
-   - `.github/workflows/ship-service.yml` — verbatim from design §12.
+   - `.github/workflows/build.yml` — reusable build + push (Buildx, Docker Hub login, verbatim tag, optional `:latest`, optional build-args, SLSA provenance attestation).
+   - `.github/workflows/deploy.yml` — reusable tailnet-join + SSH `deploy-service` runner. Callable independently for rollback (`workflow_dispatch -f tag=v1.2.8`).
    - `.github/workflows/ansible-apply.yml` — reusable workflow; installs `op` CLI via `1password/install-cli-action@v1`, clones `infra`, runs `ansible-playbook site.yml` with `OP_SERVICE_ACCOUNT_TOKEN`.
    - `.github/workflows/quality-go.yml` — reusable for the gateway repo (go vet, go test -race, golangci-lint).
    - `.github/workflows/quality-php.yml` — reusable for the api repo (composer checks).
@@ -1050,14 +1051,14 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
 
 ### Verification checklist
 
-- [x] `cash-track/.github` repo exists with 5 workflow files.
+- [x] `cash-track/.github` repo exists with 6 workflow files (`build.yml`, `deploy.yml`, `ansible-apply.yml`, `quality-go.yml`, `quality-php.yml`, `quality-node.yml`).
 - [x] Tailscale admin → ACLs → validate JSON, save.
-- [x] `ship-service.yml` passes `actionlint`.
+- [x] `build.yml` and `deploy.yml` pass `actionlint`.
 - [ ] Claude Code reviews (but does not submit) the PR before operator merges.
 
 ### Commit (in `cash-track/.github` repo)
 
-`feat: add reusable ship-service, ansible-apply, and quality workflows`
+`feat: add reusable build, deploy, ansible-apply, and quality workflows`
 
 ### Handoff
 
@@ -1077,37 +1078,81 @@ The infra images (`mysql`, `redis`, `mysql-backup`) ship through the same `ship-
 
 ### Action items
 
+The release pipeline is split — `release.yml` chains two reusables instead of calling one combined workflow. This preserves the existing `build.yml` / `deploy.yml` / `release.yml` per-repo shape and lets rollback skip the rebuild step.
+
 For each repo, in a local clone:
-1. **Modify `.github/workflows/release.yml`** to the 9-line shape per design §12:
+
+1. **Replace `.github/workflows/release.yml`** with the chained shape:
    ```yaml
-   name: Release
+   name: release
    on:
      push:
        tags: ['v*.*.*']
    jobs:
-     ship:
-       uses: cash-track/.github/.github/workflows/ship-service.yml@main
+     build:
+       uses: cash-track/.github/.github/workflows/build.yml@main
+       with:
+         image: cashtrack/<name>
+         tag:   ${{ github.ref_name }}
+         build_args: |
+           GIT_COMMIT=${{ github.sha }}
+           GIT_TAG=${{ github.ref_name }}
+       secrets: inherit
+     deploy:
+       needs: build
+       uses: cash-track/.github/.github/workflows/deploy.yml@main
        with:
          service: <name>
-         image:   cashtrack/<name>
          tag:     ${{ github.ref_name }}
          run_migrations: <true for api only, false otherwise>
        secrets: inherit
    ```
-2. **Leave the existing `deploy.yml` workflow untouched** — still the K8s path for the 48h rollback window.
-3. **Commit on a feature branch in each repo**: `chore(ci): migrate release.yml to cash-track/.github reusable workflow`.
-4. **[OPERATOR-ONLY]** opens PRs, reviews (test builds pass), merges when Stage 11 is merged and the cutover window nears.
+2. **Replace `.github/workflows/build.yml`** with a thin caller for manual rebuild (no deploy):
+   ```yaml
+   name: build
+   on:
+     workflow_dispatch:
+       inputs:
+         tag: { type: string, required: true }
+   jobs:
+     build:
+       uses: cash-track/.github/.github/workflows/build.yml@main
+       with:
+         image: cashtrack/<name>
+         tag:   ${{ inputs.tag }}
+       secrets: inherit
+   ```
+3. **Replace `.github/workflows/deploy.yml`** (the K8s deploy) with a thin caller for rollback / redeploy:
+   ```yaml
+   name: deploy
+   on:
+     workflow_dispatch:
+       inputs:
+         tag:            { type: string,  required: true }
+         run_migrations: { type: boolean, default: false }
+   jobs:
+     deploy:
+       uses: cash-track/.github/.github/workflows/deploy.yml@main
+       with:
+         service: <name>
+         tag:     ${{ inputs.tag }}
+         run_migrations: ${{ inputs.run_migrations }}
+       secrets: inherit
+   ```
+   The old K8s `deploy.yml` is renamed to `deploy-k8s.yml` and kept disabled (workflow_dispatch only) for the 48h rollback window — see Stage 13.
+4. **Commit on a feature branch in each repo**: `chore(ci): migrate release.yml to cash-track/.github reusable workflows`.
+5. **[OPERATOR-ONLY]** opens PRs, reviews (test builds pass), merges when Stage 11 is merged and the cutover window nears.
 
 ### Verification checklist
 
-- [ ] Each of the 7 service repos (api, gateway, frontend, website, mysql, redis, mysql-backup) has a new `release.yml` of ≤ 20 lines.
-- [ ] The old `release.yml` / `build.yml` (if it built and pushed directly, or did K8s deploys) is removed or replaced.
+- [ ] Each of the 7 service repos (api, gateway, frontend, website, mysql, redis, mysql-backup) has new `release.yml`, `build.yml`, and `deploy.yml` thin-caller workflows (each ≤ 25 lines).
+- [ ] The old K8s `deploy.yml` is renamed to `deploy-k8s.yml` (or removed) — never auto-fires after the cutover.
 - [ ] `actionlint` clean in each repo.
-- [ ] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image and SSHes to the droplet via Tailscale — but do not run migrations on scratch. This is the CI smoke test before cutover.
+- [ ] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image (no deploy chained), then a manual `gh workflow run deploy.yml -f tag=v0.0.0-test` SSHes to the droplet via Tailscale. Do not run migrations on scratch. This is the CI smoke test before cutover.
 
 ### Commit (per repo)
 
-`chore(ci): migrate release.yml to cash-track/.github reusable ship-service`
+`chore(ci): migrate release.yml to cash-track/.github reusable build + deploy`
 
 ### Handoff
 
