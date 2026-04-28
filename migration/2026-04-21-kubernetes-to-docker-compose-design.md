@@ -1077,26 +1077,31 @@ The release pipeline is split into two reusables — `build.yml` (build + push) 
   the existing image off Docker Hub. A combined "ship" workflow would force a rebuild for every
   rollback, breaking the deterministic-image guarantee.
 
-`build.yml` (build + push only):
+`build.yml` (build + push only) — uses `docker/metadata-action@v5` to derive tags from the git
+ref (the existing org convention: `type=sha` for the commit SHA tag, `type=semver,pattern={{version}}`
+to strip the `v` from `v1.2.9` git tags so the image is pushed as `1.2.9`). The `:latest` push
+is controlled by metadata-action's `flavor: latest=auto` rule (only the highest semver). Outputs
+the resolved `version` so the chained deploy job can pass the same tag the build pushed:
 
 ```yaml
 name: Build
 on:
   workflow_call:
     inputs:
-      image:        { required: true,  type: string }
-      tag:          { required: true,  type: string }
-      context:      { required: false, type: string,  default: "." }
-      dockerfile:   { required: false, type: string,  default: "Dockerfile" }
-      push_latest:  { required: false, type: boolean, default: true }
-      build_args:   { required: false, type: string,  default: "" }
-      attest:       { required: false, type: boolean, default: true }
+      image:      { required: true,  type: string }
+      context:    { required: false, type: string,  default: "." }
+      dockerfile: { required: false, type: string,  default: "Dockerfile" }
+      tag_rules:  { required: false, type: string,  default: "type=sha\ntype=semver,pattern={{version}}" }
+      flavor:     { required: false, type: string,  default: "latest=auto" }
+      build_args: { required: false, type: string,  default: "" }
+      attest:     { required: false, type: boolean, default: true }
     secrets:
       DOCKERHUB_USERNAME: { required: true }
       DOCKERHUB_TOKEN:    { required: true }
     outputs:
-      digest:
-        value: ${{ jobs.build.outputs.digest }}
+      digest:  { value: ${{ jobs.build.outputs.digest }} }
+      version: { value: ${{ jobs.build.outputs.version }} }
+      tags:    { value: ${{ jobs.build.outputs.tags }} }
 
 jobs:
   build:
@@ -1106,7 +1111,9 @@ jobs:
       id-token: write
       attestations: write
     outputs:
-      digest: ${{ steps.push.outputs.digest }}
+      digest:  ${{ steps.push.outputs.digest }}
+      version: ${{ steps.meta.outputs.version }}
+      tags:    ${{ steps.meta.outputs.tags }}
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -1114,13 +1121,20 @@ jobs:
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ inputs.image }}
+          tags:   ${{ inputs.tag_rules }}
+          flavor: ${{ inputs.flavor }}
       - id: push
         uses: docker/build-push-action@v6
         with:
-          context: ${{ inputs.context }}
-          file:    ${{ inputs.dockerfile }}
-          push:    true
-          tags:    ${{ inputs.image }}:${{ inputs.tag }}${{ inputs.push_latest && format('\n{0}:latest', inputs.image) || '' }}
+          context:    ${{ inputs.context }}
+          file:       ${{ inputs.dockerfile }}
+          push:       true
+          tags:       ${{ steps.meta.outputs.tags }}
+          labels:     ${{ steps.meta.outputs.labels }}
           build-args: ${{ inputs.build_args }}
           cache-from: type=gha
           cache-to:   type=gha,mode=max
@@ -1188,7 +1202,6 @@ jobs:
     uses: cash-track/.github/.github/workflows/build.yml@main
     with:
       image: cashtrack/api
-      tag:   ${{ github.ref_name }}
       build_args: |
         GIT_COMMIT=${{ github.sha }}
         GIT_TAG=${{ github.ref_name }}
@@ -1199,12 +1212,12 @@ jobs:
     uses: cash-track/.github/.github/workflows/deploy.yml@main
     with:
       service: api
-      tag:     ${{ github.ref_name }}
+      tag:     ${{ needs.build.outputs.version }}     # stripped semver — matches what was pushed
       run_migrations: true
     secrets: inherit
 ```
 
-Every service repo's `release.yml` is the same shape — only `service`, `image`, and `run_migrations` vary. The repo also keeps a `build.yml` (`workflow_dispatch` → `build.yml@main`) for manual rebuild and a `deploy.yml` (`workflow_dispatch` → `deploy.yml@main`) for rollback to a known-good tag.
+Every service repo's `release.yml` is the same shape — only `service`, `image`, and `run_migrations` vary. The repo also keeps a `build.yml` (`workflow_dispatch` → `build.yml@main`) for manual rebuild (operator passes `--ref` to dispatch a specific tag/branch/SHA) and a `deploy.yml` (`workflow_dispatch` → `deploy.yml@main`) for rollback to a known-good tag (passed as the bare version, e.g. `1.2.8`).
 
 ### The on-droplet deploy script (`/opt/cashtrack/bin/deploy-service`, installed by Ansible)
 
