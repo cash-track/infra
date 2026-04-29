@@ -128,12 +128,16 @@ services:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
     networks: [app]
-    env_file: [secrets/alertmanager.env]
+    # alertmanager.yml + bot_token are rendered by ansible compose-render via
+    # `op inject` into ./secrets/alertmanager/ (chown'd to 65534:65534 for the
+    # nobody user the container runs as). Static go templates stay in the
+    # git-tracked ./config/alertmanager/templates/ tree, mounted separately.
     volumes:
       - /mnt/data/alertmanager:/alertmanager
-      - ./config/alertmanager:/etc/alertmanager:ro
+      - ./config/alertmanager/templates:/etc/alertmanager/templates:ro
+      - ./secrets/alertmanager:/etc/alertmanager-secrets:ro
     command:
-      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --config.file=/etc/alertmanager-secrets/alertmanager.yml
       - --storage.path=/alertmanager
     mem_limit: 128m
     mem_reservation: 96m

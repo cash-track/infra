@@ -46,17 +46,28 @@ secret_files:
   - mysql
   - mysql-backup
   - mysql-exporter
-  - alertmanager
   - grafana
   - crashers-bot
   - home-exporter
 
 # Per-service secret config files (YAML, JSON, etc.) rendered the same way as
 # secret_files: Jinja → op inject → 0600 file under /opt/cashtrack/secrets/.
+# Optional `owner`/`group` override the default `ops:ops` ownership when the
+# consuming container reads the file as a non-root UID via a bind-mount.
 secret_config_files:
   - template: home-exporter.config.yml.tpl
     dest: home-exporter/config.yml
     service: home-exporter
+  - template: alertmanager.yml.tpl
+    dest: alertmanager/alertmanager.yml
+    service: alertmanager
+    owner: "65534"
+    group: "65534"
+  - template: alertmanager.bot_token.tpl
+    dest: alertmanager/bot_token
+    service: alertmanager
+    owner: "65534"
+    group: "65534"
 
 # Service set currently expected to be running on the droplet. Stage 3 leaves this
 # empty — roles guard optional behaviour (e.g. `tailscale serve` for grafana) on

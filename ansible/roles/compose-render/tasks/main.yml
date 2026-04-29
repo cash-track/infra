@@ -102,8 +102,8 @@
   ansible.builtin.file:
     path: "{{ droplet_secrets_dir }}/{{ item.dest | dirname }}"
     state: directory
-    owner: ops
-    group: ops
+    owner: "{{ item.owner | default('ops') }}"
+    group: "{{ item.group | default('ops') }}"
     mode: "0750"
   loop: "{{ secret_config_files }}"
   loop_control:
@@ -114,8 +114,8 @@
     src: "{{ render_dir }}/{{ item.dest | basename }}"
     dest: "{{ droplet_secrets_dir }}/{{ item.dest }}"
     mode: "0600"
-    owner: ops
-    group: ops
+    owner: "{{ item.owner | default('ops') }}"
+    group: "{{ item.group | default('ops') }}"
   loop: "{{ secret_config_files }}"
   loop_control:
     label: "{{ item.dest }}"

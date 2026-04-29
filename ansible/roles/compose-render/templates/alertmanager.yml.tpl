@@ -1,7 +1,8 @@
-# Alertmanager 0.27 config. The telegram receiver pulls bot_token / chat_id at
-# startup from the env_file (`secrets/alertmanager.env`). `{{ env "..." }}` is
-# the alertmanager template syntax for environment substitution available in
-# 0.26+ — values stay out of disk-resident YAML.
+# Alertmanager 0.27 config. Rendered by Ansible compose-render via op inject:
+# `chat_id` is inlined as an integer (Alertmanager does not expand templates in
+# YAML keys), and the bot token is read from a sibling file via the standard
+# `bot_token_file` field. Both files live under the read-only bind-mount at
+# /etc/alertmanager-secrets/ inside the container.
 
 global:
   resolve_timeout: 5m
@@ -39,11 +40,11 @@ route:
 receivers:
   - name: telegram
     telegram_configs:
-      - bot_token: '{{ env "ALERTMANAGER_TELEGRAM_BOT_TOKEN" }}'
-        chat_id: '{{ env "ALERTMANAGER_TELEGRAM_CHAT_ID" | toInt64 }}'
+      - bot_token_file: /etc/alertmanager-secrets/bot_token
+        chat_id: {{ op_prefix }}/alertmanager-telegram/CHAT_ID
         api_url: https://api.telegram.org
         parse_mode: HTML
-        message: '{{ template "telegram.cash-track.message" . }}'
+        message: '{% raw %}{{ template "telegram.cash-track.message" . }}{% endraw %}'
         send_resolved: true
 
 # Suppress lower-severity duplicates of the same alert on the same instance
