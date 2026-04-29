@@ -42,10 +42,7 @@ Output end result in `./infra/migration/` directory for review.
 
 
 
-## Problem 1 (after final stages before applying migration)
+## Problem 3
 
-I found many differences between observability services configuration created for Docker env comparing with existing configuration in Kubernetes env. Specifically `alertmanager`, `grafana`, `grafana-loki`, `grafana-tempo`, `prometheus`, `promtail. Review observability services configuration and compare old kubernetes configuration with new docker configuration. Execute full configuration audit. The services should have exactly the same configuration except different networking configurations and new environment resources aspects.
+Consider moving all non-cash-track app related services to different DigitalOcean droplet. Possibly linked to a different IP address. Estimate the cost of this solution comparing to a single droplet. Use the smallest droplet size possible for the other services: crashers-bot (Laravel app for telegram bot), home-exporter (small Go daemon for home internet monitoring), potwora.com.ua (wordpress app with low traffic). The apps which require DB can connect via internal DigitalOcean network to cash-track DB using different user to save resources for DB access. Observability of these apps are not so important.
 
-## Problem 2
-
-Existing kubernetes infrastructure serves traffic for two domains: `cash-track.app`, `potwora.com.ua`. The infrastructure for the first domain is the original target of the migration plan, this includes security enforcements like TLS certificate pinning between CloudFlare and DigitalOcean (Origin Certificate). Whereas second domain is Wordpress website with single docker container (planned to be migrated after, but architecture needs to consider the fact of one more domain). Both domains configured in CloudFlare as separated projects, so their Origin Certificates also different (currently no origin certificates created for `potwora.com.ua`). When Traefic will be configured to allow traffic from Cloudflare only for one Origin Certificate created under `cash-track.app`, the traffic for `potwora.com.ua` should be still allowed to go through from CloudFlare to DigitalOcean. It is acceptable to use Origin Certificate for `cash-track.app` and omit for `potwora.com.ua` if possible. Preferrable to create two Origin Certificates and use in Traefik (if possible technically). Consider the best approach to comply with the requirements.

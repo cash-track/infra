@@ -1,6 +1,14 @@
 # Static config consumed by the file provider. Cert PEMs are rendered onto the
-# droplet by the compose-render Ansible role from the 1Password
-# `cloudflare-origin-cert` document; this file references them by absolute path.
+# droplet by the compose-render Ansible role from per-zone 1Password items
+# (`cloudflare-origin-cert`, `cloudflare-origin-cert-potwora`); this file
+# references them by absolute path.
+#
+# Each CF zone has its own Origin Certificate (CF issues per-zone, never a
+# multi-zone cert). Traefik picks a cert per request by SNI matching against
+# the cert's CN/SAN — no router config needed. To add a new domain: drop its
+# Origin Cert pair into 1Password, append a `cf_origin_certs` entry in
+# `ansible/roles/compose-render/defaults/main.yml`, and add a matching
+# `tls.certificates` block here.
 #
 # `cloudflare-only.ipAllowList.sourceRange` is rewritten by the
 # ops/firewall-refresh-cf.yml playbook on a weekly cadence (and on demand). The
@@ -9,8 +17,10 @@
 
 tls:
   certificates:
-    - certFile: /etc/traefik/origin-cert.pem
-      keyFile: /etc/traefik/origin-key.pem
+    - certFile: /etc/traefik/cash-track-app-cert.pem
+      keyFile: /etc/traefik/cash-track-app-key.pem
+    - certFile: /etc/traefik/potwora-com-ua-cert.pem
+      keyFile: /etc/traefik/potwora-com-ua-key.pem
 
 http:
   middlewares:

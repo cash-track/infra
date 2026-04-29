@@ -50,6 +50,20 @@ secret_files:
   - crashers-bot
   - home-exporter
 
+# Cloudflare Origin Certificates rendered into Traefik's config dir. One entry
+# per CF zone — each zone has its own Origin Certificate (CF issues per-zone),
+# stored in its own 1Password item with `origin-cert.pem` + `origin-key.pem`
+# attachments. Traefik's file provider selects the right cert per request by
+# SNI; adding a domain = add an item here + a `tls.certificates` entry in
+# `compose/config/traefik/dynamic.yml`. `name` is the on-droplet filename stem.
+cf_origin_certs:
+  - name: cash-track-app
+    cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"
+    key_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"
+  - name: potwora-com-ua
+    cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert-potwora/origin-cert.pem"
+    key_op_ref: "op://cash-track-prod/cloudflare-origin-cert-potwora/origin-key.pem"
+
 # Per-service secret config files (YAML, JSON, etc.) rendered the same way as
 # secret_files: Jinja → op inject → 0600 file under /opt/cashtrack/secrets/.
 # Optional `owner`/`group` override the default `ops:ops` ownership when the

@@ -49,9 +49,21 @@ secret_config_files:
     owner: "65534"
     group: "65534"
 
-# 1Password attachment refs for the Cloudflare origin certificate. Two file
-# attachments on the same `cloudflare-origin-cert` item — CF only shows the
-# private key once at creation time, so both pieces are saved into 1P from the
-# CF dashboard at issuance.
-cf_origin_cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"
-cf_origin_key_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"
+# Cloudflare Origin Certificates rendered into Traefik's config dir. One entry
+# per CF zone — each zone has its own Origin Certificate (CF issues per-zone),
+# stored in its own 1Password item with two file attachments (`origin-cert.pem`,
+# `origin-key.pem`). Traefik's file provider picks the right cert per request
+# by SNI, so adding a domain = add a cert pair here + a `tls.certificates`
+# entry in `compose/config/traefik/dynamic.yml`.
+#
+# `name` is used both as the on-droplet filename stem (`<name>-cert.pem`,
+# `<name>-key.pem` under `{{ droplet_traefik_dir }}`) and as the loop label —
+# keep it filesystem-safe (lowercase, hyphens). Don't use the bare domain with
+# dots: it makes the resulting filenames look like wildcards.
+cf_origin_certs:
+  - name: cash-track-app
+    cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"
+    key_op_ref: "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"
+  - name: potwora-com-ua
+    cert_op_ref: "op://cash-track-prod/cloudflare-origin-cert-potwora/origin-cert.pem"
+    key_op_ref: "op://cash-track-prod/cloudflare-origin-cert-potwora/origin-key.pem"

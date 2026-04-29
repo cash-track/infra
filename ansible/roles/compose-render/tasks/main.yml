@@ -130,45 +130,57 @@
     owner: ops
     group: ops
 
-- name: Fetch Cloudflare origin certificate from 1Password
+- name: Fetch Cloudflare origin certificates from 1Password
   ansible.builtin.command:
-    cmd: "op read {{ cf_origin_cert_op_ref }}"
+    cmd: "op read {{ item.cert_op_ref }}"
   delegate_to: localhost
   become: false
   environment:
     OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
-  register: cf_origin_cert
+  register: cf_origin_cert_fetch
   changed_when: false
   no_log: true
+  loop: "{{ cf_origin_certs }}"
+  loop_control:
+    label: "{{ item.name }}"
 
-- name: Fetch Cloudflare origin key from 1Password
+- name: Fetch Cloudflare origin keys from 1Password
   ansible.builtin.command:
-    cmd: "op read {{ cf_origin_key_op_ref }}"
+    cmd: "op read {{ item.key_op_ref }}"
   delegate_to: localhost
   become: false
   environment:
     OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
-  register: cf_origin_key
+  register: cf_origin_key_fetch
   changed_when: false
   no_log: true
+  loop: "{{ cf_origin_certs }}"
+  loop_control:
+    label: "{{ item.name }}"
 
-- name: Install Cloudflare origin certificate on droplet
+- name: Install Cloudflare origin certificates on droplet
   ansible.builtin.copy:
-    content: "{{ cf_origin_cert.stdout }}\n"
-    dest: "{{ droplet_traefik_dir }}/origin-cert.pem"
+    content: "{{ item.stdout }}\n"
+    dest: "{{ droplet_traefik_dir }}/{{ item.item.name }}-cert.pem"
     mode: "0644"
     owner: root
     group: root
+  loop: "{{ cf_origin_cert_fetch.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
   notify: Restart traefik
   no_log: true
 
-- name: Install Cloudflare origin key on droplet
+- name: Install Cloudflare origin keys on droplet
   ansible.builtin.copy:
-    content: "{{ cf_origin_key.stdout }}\n"
-    dest: "{{ droplet_traefik_dir }}/origin-key.pem"
+    content: "{{ item.stdout }}\n"
+    dest: "{{ droplet_traefik_dir }}/{{ item.item.name }}-key.pem"
     mode: "0600"
     owner: root
     group: root
+  loop: "{{ cf_origin_key_fetch.results }}"
+  loop_control:
+    label: "{{ item.item.name }}"
   notify: Restart traefik
   no_log: true
 

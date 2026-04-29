@@ -483,7 +483,9 @@ The runner does not run Ansible in the common case — it SSHes to the droplet a
 │   ├── crashers-bot.env
 │   └── home-exporter.env
 ├── config/
-│   ├── traefik/{traefik.yml,dynamic.yml,origin-cert.pem,origin-key.pem}
+│   ├── traefik/{traefik.yml,dynamic.yml,
+│   │           cash-track-app-cert.pem,cash-track-app-key.pem,
+│   │           potwora-com-ua-cert.pem,potwora-com-ua-key.pem}
 │   ├── prometheus/prometheus.yml
 │   ├── loki/loki.yml
 │   ├── tempo/tempo.yml
@@ -704,10 +706,17 @@ providers:
 `config/traefik/dynamic.yml`:
 
 ```yaml
+# One TLS cert pair per Cloudflare zone. Traefik's file provider selects the
+# right cert per request by SNI matching against the cert's CN/SAN — no router
+# config needed. Cert PEMs are rendered onto the droplet by the compose-render
+# Ansible role from per-zone 1Password items (`cloudflare-origin-cert` for
+# cash-track.app, `cloudflare-origin-cert-potwora` for potwora.com.ua).
 tls:
   certificates:
-    - certFile: /etc/traefik/origin-cert.pem
-      keyFile:  /etc/traefik/origin-key.pem
+    - certFile: /etc/traefik/cash-track-app-cert.pem
+      keyFile:  /etc/traefik/cash-track-app-key.pem
+    - certFile: /etc/traefik/potwora-com-ua-cert.pem
+      keyFile:  /etc/traefik/potwora-com-ua-key.pem
 http:
   middlewares:
     retry:
@@ -847,9 +856,13 @@ cash-track-prod/
 ├── grafana                  fields: ADMIN_PASSWORD, SMTP_PASSWORD
 ├── crashers-bot             fields: per crashers-bot-secret (BOT_TOKEN, ...)
 ├── home-exporter            fields: per home-exporter-secret
-├── cloudflare-origin-cert   attachments: origin-cert.pem, origin-key.pem
-│                            (two files; CF only shows the private key once at
-│                             creation, so save both textboxes from the dashboard)
+├── cloudflare-origin-cert            attachments: origin-cert.pem, origin-key.pem
+│                                     (cash-track.app zone — two files; CF only
+│                                      shows the private key once at creation,
+│                                      so save both textboxes from the dashboard)
+├── cloudflare-origin-cert-potwora    attachments: origin-cert.pem, origin-key.pem
+│                                     (potwora.com.ua zone — same shape, separate
+│                                      CF zone → separate Origin Cert)
 ├── tailscale                fields: OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
 ├── dockerhub                fields: USERNAME, TOKEN
 ├── do-api                   fields: TOKEN (for firewall-refresh playbook + doctl)
@@ -1500,7 +1513,7 @@ Accessed via `https://grafana-cashtrack.<tailnet>.ts.net` (Tailscale Serve).
 ### Pre-cutover (any time beforehand)
 
 1. **Create the new Spaces bucket** `cash-track-tfstate` in AMS3 with "Block all public access". Existing `cash-track-storage` (public) and `cash-track-backups` (private) stay as-is. Create one dedicated access key for it.
-2. **Set up the 1Password vault** `cash-track-prod`: create the 11 items per Section 11 (`api`, `common`, `mysql`, `mysql-exporter`, `alertmanager-telegram`, `grafana`, `crashers-bot`, `home-exporter`, `cloudflare-origin-cert`, `tailscale`, `dockerhub`, `do-api`) and populate from existing K8s secrets. Create a read-only Service Account scoped to the vault; store its token as `OP_SERVICE_ACCOUNT_TOKEN` org secret.
+2. **Set up the 1Password vault** `cash-track-prod`: create the 12 items per Section 11 (`api`, `common`, `mysql`, `mysql-exporter`, `alertmanager-telegram`, `grafana`, `crashers-bot`, `home-exporter`, `cloudflare-origin-cert`, `cloudflare-origin-cert-potwora`, `tailscale`, `dockerhub`, `do-api`) and populate from existing K8s secrets. Create a read-only Service Account scoped to the vault; store its token as `OP_SERVICE_ACCOUNT_TOKEN` org secret.
 3. **Provision infra:** `make apply && make bootstrap`. Wait for all containers green.
 4. **Restore from latest K8s MySQL backup:** `ansible-playbook ops/backup-restore.yml -e backup_id=latest`.
 5. **Internal smoke test** via Tailscale with `curl --resolve`:

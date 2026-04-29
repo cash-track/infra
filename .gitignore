@@ -4,8 +4,8 @@
 
 secrets/
 compose/.env
-compose/config/traefik/origin-cert.pem
-compose/config/traefik/origin-key.pem
+compose/config/traefik/*-cert.pem
+compose/config/traefik/*-key.pem
 *.tfstate*
 **tfplan*
 .terraform/

@@ -100,7 +100,8 @@
    | `grafana`                  | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana if migrating; else generate | grafana |
    | + `crashers-bot`           | TBD — populate by inspecting `kubectl -n telegram-bots get secret crashers-bot-secret`; expected: `BOT_TOKEN`, plus any app-specific keys | `telegram-bots/crashers-bot-secret` | crashers-bot |
    | + `home-exporter`          | `TELEGRAM_BOT_TOKEN` (mirrors `home-exporter-secret`) **plus** `HOME_TELEGRAM_CHAT_ID`, `HOME_PROBE_HOST` (extracted from the K8s `home-exporter-config` ConfigMap so the YAML config can be rendered via op inject — see `home-exporter.config.yml.tpl`) | `telegram-bots/home-exporter-secret` + `home-exporter-config` ConfigMap | home-exporter |
-   | + `cloudflare-origin-cert` | Two file attachments: `origin-cert.pem`, `origin-key.pem` | Cloudflare dashboard → SSL/TLS → Origin Server (save both the certificate textbox and the private-key textbox at creation time — Cloudflare does not retain the key) | traefik |
+   | + `cloudflare-origin-cert` | Two file attachments: `origin-cert.pem`, `origin-key.pem` (cash-track.app zone) | Cloudflare dashboard → cash-track.app zone → SSL/TLS → Origin Server (save both the certificate textbox and the private-key textbox at creation time — Cloudflare does not retain the key) | traefik |
+   | + `cloudflare-origin-cert-potwora` | Two file attachments: `origin-cert.pem`, `origin-key.pem` (potwora.com.ua zone) | Cloudflare dashboard → potwora.com.ua zone → SSL/TLS → Origin Server. Issue a fresh Origin Cert for `*.potwora.com.ua, potwora.com.ua` (no certificate currently exists for this zone). | traefik |
    | + `tailscale`              | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` (tags `tag:prod-server,tag:ci`) | Tailscale admin → OAuth clients | terraform (cloud-init authkey mint) |
    | + `dockerhub`              | `USERNAME`, `TOKEN` | Docker Hub PAT, scope `read+write` on `cashtrack/*` | CI |
    | + `do-api`                 | `TOKEN` | DO dashboard PAT (scope `droplet:*, reserved_ip:*, volume:*, firewall:*, load_balancer:*, ssh_key:*, spaces:*, domain:*`) | terraform, firewall-refresh |
@@ -441,7 +442,7 @@ Frontend has no secrets in K8s (only `common-config` env vars), so no `frontend.
    - `alertmanager` — `image: prom/alertmanager:v0.27.0`, `env_file: [secrets/alertmanager.env]`, volume `/mnt/data/alertmanager:/alertmanager`, `./config/alertmanager:/etc/alertmanager:ro`
 4. **Write `compose.telegram.yml`** — structure only for now; `crashers-bot` and `home-exporter` service bodies filled in Stage 10. Include the shared `networks` reference.
 5. **Write `config/traefik/traefik.yml`** exactly per design §8.
-6. **Write `config/traefik/dynamic.yml`** per design §8 + §14 `cloudflare-only` middleware. The cert file paths point to `/etc/traefik/origin-cert.pem` and `/etc/traefik/origin-key.pem` — these are rendered by Ansible compose-render role (Stage 5) from the 1Password `cloudflare-origin-cert` attachments.
+6. **Write `config/traefik/dynamic.yml`** per design §8 + §14 `cloudflare-only` middleware. The `tls.certificates` list carries one entry per CF zone — `/etc/traefik/cash-track-app-{cert,key}.pem` and `/etc/traefik/potwora-com-ua-{cert,key}.pem`. PEMs are rendered by the Ansible compose-render role (Stage 5) from the 1Password `cloudflare-origin-cert` (cash-track.app) and `cloudflare-origin-cert-potwora` (potwora.com.ua) items. Traefik picks per request via SNI — no router-side cert binding required.
 7. **Write `config/prometheus/prometheus.yml`** — scrape jobs for:
    - `prometheus` itself (localhost:9090)
    - `node-exporter` (host:9100)
@@ -542,7 +543,7 @@ Frontend has no secrets in K8s (only `common-config` env vars), so no `frontend.
 - **Frontend env template.** Added `frontend.env.tpl` (URLs only, no secrets) — the frontend image consumes `VUE_APP_*` at runtime via its entrypoint, matching the K8s `common-config` envFrom on `infra/services/frontend/deployment.yml`. The original plan said the frontend had no env file; that was incorrect against the K8s reality.
 - **`group_vars/all/main.yml` patch.** `secret_files` updated to include `frontend.env` and `website.env` (the latter was missing from Stage 3's seed list).
 - **Telegram stack.** Service stubs gated behind `profiles: [stage10]` so default `compose up` skips them until Stage 10 fills the bodies.
-- **`.gitignore`.** Added `compose/.env`, `compose/config/traefik/origin-cert.pem`, `compose/config/traefik/origin-key.pem` so rendered/secret artefacts can't slip into git.
+- **`.gitignore`.** Added `compose/.env`, `compose/config/traefik/*-cert.pem`, `compose/config/traefik/*-key.pem` so rendered/secret artefacts can't slip into git regardless of which CF zone the cert belongs to.
 
 ### Commit
 
@@ -604,11 +605,11 @@ No operator action. Proceed to Stage 5.
    - Run `op inject -i ... -o ...` via `ansible.builtin.command`, `delegate_to: localhost`, `environment: OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"`, `no_log: true`
    - `ansible.builtin.copy` the rendered `.env` to `/opt/cashtrack/secrets/<name>.env`, `mode: 0600`, `owner: ops`, `notify: "restart {{ item }}"`, `no_log: true`
    - Wipe `/tmp/cashtrack-render/` at the end
-   Also render `env.tpl` → `.env` on the droplet (no `op inject` — no secrets in it). Also fetch the Traefik cert pair: `op read "op://cash-track-prod/cloudflare-origin-cert/origin-cert.pem"` and `op read "op://cash-track-prod/cloudflare-origin-cert/origin-key.pem"` (two separate file attachments on the same item), copy each to `/opt/cashtrack/config/traefik/origin-{cert,key}.pem` with `mode: 0600`, owner root. Also render `alertmanager.yml` and any other per-service config files that reference rendered environment values.
+   Also render `env.tpl` → `.env` on the droplet (no `op inject` — no secrets in it). Also fetch the Traefik cert pairs: loop over `cf_origin_certs` (defaults in `roles/compose-render/defaults/main.yml`, mirrored in `group_vars/all/main.yml`), `op read` each entry's `cert_op_ref` and `key_op_ref` (one CF Origin Cert per zone — `cloudflare-origin-cert` for cash-track.app, `cloudflare-origin-cert-potwora` for potwora.com.ua), copy each to `/opt/cashtrack/config/traefik/<name>-cert.pem` (mode 0644 root) and `<name>-key.pem` (mode 0600 root). Traefik selects the right cert per request by SNI — adding a domain = drop a new cert pair into 1Password and append a `cf_origin_certs` entry plus a `tls.certificates` block in `compose/config/traefik/dynamic.yml`. Also render `alertmanager.yml` and any other per-service config files that reference rendered environment values.
 
    **Critical:** `no_log: true` on every task that handles a rendered file. Ansible verbose output should never leak a secret.
 
-5. **Write `compose-render/handlers/main.yml`** — one handler per `secret_files` item plus a shared `restart traefik` handler for the CF cert. Each handler uses `community.docker.docker_compose_v2` with `restarted: true` and `services: [<name>]`.
+5. **Write `compose-render/handlers/main.yml`** — one handler per `secret_files` item plus a single shared `Restart traefik` handler triggered by any of the per-zone CF cert/key copies (handler dedup means N rendered cert pairs still cause exactly one traefik restart per play). Each handler uses `community.docker.docker_compose_v2` with `state: restarted` and `services: [<name>]`.
 6. **Write `compose-up/tasks/main.yml`:**
    ```yaml
    - name: Upload compose files
