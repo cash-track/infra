@@ -59,11 +59,18 @@ services:
     oom_score_adj: 0
 
   grafana:
-    image: grafana/grafana:11.3.0
+    image: grafana/grafana:11.4.0
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/grafana.env]
     user: "472:472"
+    # Server settings ported from the K8s grafana.ini. SMTP/admin password are
+    # rendered via op inject into secrets/grafana.env; non-secret server flags
+    # live here so they're inspectable in git.
+    environment:
+      GF_SERVER_ENABLE_GZIP: "true"
+      GF_SECURITY_COOKIE_SAMESITE: "strict"
+      GF_LOG_MODE: "console"
     volumes:
       - /mnt/data/grafana:/var/lib/grafana
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -96,7 +103,7 @@ services:
     oom_score_adj: 500
 
   tempo:
-    image: grafana/tempo:2.6.0
+    image: grafana/tempo:2.7.2
     restart: unless-stopped
     networks: [app]
     user: "10001:10001"
@@ -106,6 +113,25 @@ services:
     command: ["-config.file=/etc/tempo.yaml"]
     mem_limit: 640m
     mem_reservation: 512m
+    oom_score_adj: 500
+
+  # OTEL collector sidecar — same pattern as the K8s `grafana-tempo` pod's
+  # otel-collector container. Uses `network_mode: service:tempo` so it shares
+  # tempo's network namespace: clients hit `tempo:4317` (this collector) and
+  # the collector forwards to `127.0.0.1:4319` (tempo's distributor). Drops
+  # healthcheck spans before they reach tempo, matching the K8s tail_sampling
+  # policy at infra/services/grafana-tempo/otel-configs/collector-config.yaml.
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.116.1
+    restart: unless-stopped
+    network_mode: "service:tempo"
+    depends_on:
+      tempo: { condition: service_started }
+    volumes:
+      - ./config/tempo/collector-config.yaml:/etc/otelcol-contrib/config.yaml:ro
+    command: ["--config=/etc/otelcol-contrib/config.yaml"]
+    mem_limit: 128m
+    mem_reservation: 96m
     oom_score_adj: 500
 
   promtail:

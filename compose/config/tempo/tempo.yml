@@ -13,8 +13,13 @@ distributor:
     otlp:
       protocols:
         grpc:
-          # OTLP gRPC. api / gateway / website target tempo:4317.
-          endpoint: 0.0.0.0:4317
+          # OTLP gRPC. api / gateway / website target tempo:4317 — that port
+          # is owned by the otel-collector sidecar (which shares this network
+          # namespace via `network_mode: service:tempo`). The sidecar applies
+          # tail-sampling (drops healthcheck spans) and forwards here on 4319.
+          # Bind to loopback only so the receiver isn't reachable directly
+          # from outside the shared netns.
+          endpoint: 127.0.0.1:4319
 
 ingester:
   max_block_duration: 5m

@@ -1,0 +1,60 @@
+# OTEL collector sidecar — runs alongside tempo via `network_mode: service:tempo`
+# in compose.obs.yml. Mirrors the K8s sidecar at
+# infra/services/grafana-tempo/otel-configs/collector-config.yaml.
+#
+# Pipeline: clients → :4317 (here) → tail_sampling → batch → tempo on :4319
+# (loopback in the shared netns).
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+
+processors:
+  batch: {}
+
+  # Drop traces whose root span is a healthcheck. invert_match=true keeps spans
+  # that DON'T match the listed values, so the sampler emits everything except
+  # the healthcheck noise. Three policies cover the three label conventions
+  # used across the stack (PHP/Spiral, Go gateway, Nuxt website).
+  tail_sampling:
+    decision_wait: 10s
+    num_traces: 100
+    policies:
+      - name: noise-by-target-policy
+        type: string_attribute
+        string_attribute:
+          key: http.target
+          invert_match: true
+          values: ["/healthcheck"]
+          enabled_regex_matching: false
+      - name: noise-by-http-route-policy
+        type: string_attribute
+        string_attribute:
+          key: http.route
+          invert_match: true
+          values: ["/live", "/ready"]
+          enabled_regex_matching: false
+      - name: noise-by-route-policy
+        type: string_attribute
+        string_attribute:
+          key: route.action
+          invert_match: true
+          values: ["healthcheck"]
+          enabled_regex_matching: false
+
+exporters:
+  otlp:
+    # Same network namespace as tempo (network_mode: service:tempo), so the
+    # tempo distributor receiver on 127.0.0.1:4319 is reachable on loopback.
+    endpoint: 127.0.0.1:4319
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [tail_sampling, batch]
+      exporters: [otlp]
