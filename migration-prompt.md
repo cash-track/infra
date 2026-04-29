@@ -40,9 +40,3 @@ Use devops-engineer, sre-engineer, terraform-engineer, terraform-skill skills.
 
 Output end result in `./infra/migration/` directory for review.
 
-
-
-## Problem 3
-
-Consider moving all non-cash-track app related services to different DigitalOcean droplet. Possibly linked to a different IP address. Estimate the cost of this solution comparing to a single droplet. Use the smallest droplet size possible for the other services: crashers-bot (Laravel app for telegram bot), home-exporter (small Go daemon for home internet monitoring), potwora.com.ua (wordpress app with low traffic). The apps which require DB can connect via internal DigitalOcean network to cash-track DB using different user to save resources for DB access. Observability of these apps are not so important.
-
