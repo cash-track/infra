@@ -7,6 +7,23 @@ users:
     shell: /bin/bash
     ssh_authorized_keys:
       - ${ops_ssh_public_key}
+  # Least-privilege identity for CI deploys. No sudo group, no docker group;
+  # only allowed to invoke the on-droplet deploy-service script via sudo.
+  - name: deploy
+    groups: []
+    shell: /bin/bash
+    lock_passwd: true
+
+write_files:
+  - path: /etc/sudoers.d/deploy
+    owner: root:root
+    permissions: "0440"
+    content: |
+      # CI deploy account: may invoke only the deploy-service helper as root.
+      # Argument validation lives inside the script — sudo arg-matching is too
+      # fragile to be the only line of defence.
+      deploy ALL=(root) NOPASSWD: /opt/cashtrack/bin/deploy-service
+      Defaults!/opt/cashtrack/bin/deploy-service !requiretty, env_reset
 
 package_update: true
 packages: [curl, gnupg, python3, python3-apt]

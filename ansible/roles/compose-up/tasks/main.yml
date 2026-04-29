@@ -38,8 +38,8 @@
   ansible.builtin.copy:
     src: deploy-service
     dest: "{{ droplet_bin_dir }}/deploy-service"
-    owner: ops
-    group: ops
+    owner: root
+    group: root
     mode: "0755"
 
 - name: Compose up (pull missing, remove orphans)
