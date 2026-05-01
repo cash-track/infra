@@ -102,7 +102,7 @@
    | + `home-exporter`          | `TELEGRAM_BOT_TOKEN` (mirrors `home-exporter-secret`) **plus** `HOME_TELEGRAM_CHAT_ID`, `HOME_PROBE_HOST` (extracted from the K8s `home-exporter-config` ConfigMap so the YAML config can be rendered via op inject — see `home-exporter.config.yml.tpl`) | `telegram-bots/home-exporter-secret` + `home-exporter-config` ConfigMap | home-exporter |
    | + `cloudflare-origin-cert` | Two file attachments: `origin-cert.pem`, `origin-key.pem` (cash-track.app zone) | Cloudflare dashboard → cash-track.app zone → SSL/TLS → Origin Server (save both the certificate textbox and the private-key textbox at creation time — Cloudflare does not retain the key) | traefik |
    | + `cloudflare-origin-cert-potwora` | Two file attachments: `origin-cert.pem`, `origin-key.pem` (potwora.com.ua zone) | Cloudflare dashboard → potwora.com.ua zone → SSL/TLS → Origin Server. Issue a fresh Origin Cert for `*.potwora.com.ua, potwora.com.ua` (no certificate currently exists for this zone). | traefik |
-   | + `tailscale`              | `OAUTH_CLIENT_ID`, `OAUTH_CLIENT_SECRET` (tags `tag:prod-server,tag:ci`) | Tailscale admin → OAuth clients | terraform (cloud-init authkey mint) |
+   | + `tailscale`              | `API_KEY` (personal API key) | Tailscale admin → Settings → Personal API keys | terraform (cloud-init authkey mint) |
    | + `dockerhub`              | `USERNAME`, `TOKEN` | Docker Hub PAT, scope `read+write` on `cashtrack/*` | CI |
    | + `do-api`                 | `TOKEN` | DO dashboard PAT (scope `droplet:*, reserved_ip:*, volume:*, firewall:*, load_balancer:*, ssh_key:*, spaces:*, domain:*`) | terraform, firewall-refresh |
    | + `cash-track-tfstate`     | `ACCESS_KEY_ID`, `SECRET_ACCESS_KEY` | Spaces access keypair generated in step 1 (dedicated; not shared with `cash-track-backups` or `cash-track-storage`) | terraform `backend.hcl` (operator local), CI org secrets `SPACES_TFSTATE_ID/KEY` |
@@ -123,8 +123,7 @@
    | `OP_SERVICE_ACCOUNT_TOKEN` | `infra` only | Token from step 4 |
    | `SPACES_TFSTATE_ID` | `infra` only | Access key ID from step 1 |
    | `SPACES_TFSTATE_KEY` | `infra` only | Secret access key from step 1 |
-   | `TS_OAUTH_CLIENT_ID` | All service repos + `infra` + `.github` | `tailscale` item from vault |
-   | `TS_OAUTH_SECRET` | All service repos + `infra` + `.github` | `tailscale` item from vault |
+   | `TS_AUTH_KEY` | All service repos + `infra` + `.github` | Reusable ephemeral Tailscale auth key tagged `tag:ci`; generate in Tailscale admin → Keys; rotate every 90 days |
    | `DOCKERHUB_USERNAME` | All service repos | `dockerhub.USERNAME` |
    | `DOCKERHUB_TOKEN` | All service repos | `dockerhub.TOKEN` |
 
@@ -189,7 +188,7 @@ Post a message to Claude Code: *"Stage 0 complete. Vault populated, Service Acco
    - `tailscale_hostname` (string)
    - `volume_id` (string)
 9. **Write `./infra/terraform/terraform.tfvars`** — exact values from design §4. `ssh_key_fingerprints` is the public MD5 fingerprint of the ops key, NOT the private key. This is a non-secret.
-10. **Write `terraform/modules/droplet/main.tf`** — `digitalocean_droplet.host` with `count = var.droplet_count`, `user_data = templatefile("${path.module}/templates/cloud-init.yaml", { ... })`. The cloud-init template receives `hostname`, `ops_ssh_public_key`, `tailscale_authkey`, `volume_name` via `templatefile`. The authkey is minted by a `data "tailscale_auth_key"` or a `digitalocean_ssh_key` pattern — design §6 says "TF provider mints single-use tagged non-ephemeral authkey"; use the `tailscale` Terraform provider with vars `tailscale_oauth_client_id` / `tailscale_oauth_client_secret` read from `var.*`. These OAuth values are provided via `TF_VAR_tailscale_oauth_*` environment variables by the operator at apply time; they are NOT stored in `terraform.tfvars` (kept out of git).
+10. **Write `terraform/modules/droplet/main.tf`** — `digitalocean_droplet.host` with `count = var.droplet_count`, `user_data = templatefile("${path.module}/templates/cloud-init.yaml", { ... })`. The cloud-init template receives `hostname`, `ops_ssh_public_key`, `tailscale_authkey`, `volume_name` via `templatefile`. The authkey is minted by the `tailscale_tailnet_key` resource via the `tailscale` Terraform provider, authenticated with `var.tailscale_api_key` (a personal API key). This value is provided via `TF_VAR_tailscale_api_key` at apply time; it is NOT stored in `terraform.tfvars` (kept out of git).
 11. **Write `terraform/modules/droplet/templates/cloud-init.yaml`** — copy verbatim from design §6.
 12. **Write `terraform/modules/block_volume/main.tf`** — `digitalocean_volume.data` + `digitalocean_volume_attachment.data`. `lifecycle { prevent_destroy = true }` on the volume.
 13. **Write `terraform/modules/reserved_ip/main.tf`** — `digitalocean_reserved_ip.main` + `digitalocean_reserved_ip_assignment.main`. `prevent_destroy = true` on the IP.
@@ -228,7 +227,7 @@ Tell operator: *"Stage 1 committed. Ready for Stage 2: please run `terraform ini
 
 **Goal:** Validate that the Terraform code actually plans against DO, and that the plan matches expectations.
 
-**Why operator-only:** `terraform init` requires `backend.hcl` with real Spaces credentials; `terraform plan` requires `DIGITALOCEAN_TOKEN` and `TF_VAR_tailscale_oauth_*` environment variables sourced from the vault.
+**Why operator-only:** `terraform init` requires `backend.hcl` with real Spaces credentials; `terraform plan` requires `DIGITALOCEAN_TOKEN` and `TF_VAR_tailscale_api_key` environment variables sourced from the vault.
 
 ### Action items
 
@@ -252,8 +251,7 @@ Tell operator: *"Stage 1 committed. Ready for Stage 2: please run `terraform ini
    ```bash
    eval "$(op signin)"
    export DIGITALOCEAN_TOKEN="$(op read op://cash-track-prod/do-api/TOKEN)"
-   export TF_VAR_tailscale_oauth_client_id="$(op read op://cash-track-prod/tailscale/OAUTH_CLIENT_ID)"
-   export TF_VAR_tailscale_oauth_client_secret="$(op read op://cash-track-prod/tailscale/OAUTH_CLIENT_SECRET)"
+   export TF_VAR_tailscale_api_key="$(op read op://cash-track-prod/tailscale/API_KEY)"
    ```
 3. **Initialize backend:**
    ```bash
@@ -792,9 +790,8 @@ Tell operator: *"Stages 1–6 done. All code written. Ready for Stage 7: first p
    ```bash
    eval "$(op signin)"
    export DIGITALOCEAN_TOKEN="$(op read op://cash-track-prod/do-api/TOKEN)"
-   export TF_VAR_tailscale_oauth_client_id="$(op read op://cash-track-prod/tailscale/OAUTH_CLIENT_ID)"
-   export TF_VAR_tailscale_oauth_client_secret="$(op read op://cash-track-prod/tailscale/OAUTH_CLIENT_SECRET)"
-   export OP_SERVICE_ACCOUNT_TOKEN="$(op read op://cash-track-prod/_service-account/TOKEN)"   # OR your personal cache
+   export TF_VAR_tailscale_api_key="$(op read op://cash-track-prod/tailscale/API_KEY)"
+   export OP_SERVICE_ACCOUNT_TOKEN="$(op read op://cash-track-prod/service-account/TOKEN)"   # OR your personal cache
    ```
 2. **Apply Terraform:**
    ```bash
@@ -1369,8 +1366,7 @@ These three generalizations also benefit the cash-track-org services — keep th
 |---|---|---|---|
 | `DOCKER_HUB_USER` | shared `vovanms` Docker Hub account | build/push step | already configured in `vokomarov/crashers-bot` |
 | `DOCKER_HUB_TOKEN` | shared `vovanms` Docker Hub account | build/push step | already configured in `vokomarov/crashers-bot` |
-| `TAILSCALE_OAUTH_CLIENT_ID` | cash-track Tailscale tailnet OAuth client | SSH-into-droplet step | scoped to ephemeral nodes with the `tag:ci` ACL tag |
-| `TAILSCALE_OAUTH_CLIENT_SECRET` | same | SSH-into-droplet step | rotate if either repo's secret-store is compromised |
+| `TS_AUTH_KEY` | Reusable ephemeral Tailscale auth key tagged `tag:ci` | SSH-into-droplet step | generate in Tailscale admin → Keys; rotate every 90 days |
 | `INFRA_REPO_PAT` | fine-grained PAT, `vokomarov` user | infra version-bump PR | scope: `cash-track/infra` repo only, `contents: write` + `pull-requests: write`; 90-day expiry; calendar reminder to rotate |
 | `OP_SERVICE_ACCOUNT_TOKEN` | 1Password Service Account | only if `op inject` runs from this workflow | not needed for build/push; only needed if a future hook reads secrets |
 
@@ -1404,8 +1400,7 @@ jobs:
     secrets:
       DOCKER_HUB_USER:               ${{ secrets.DOCKER_HUB_USER }}
       DOCKER_HUB_TOKEN:              ${{ secrets.DOCKER_HUB_TOKEN }}
-      TAILSCALE_OAUTH_CLIENT_ID:     ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-      TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+      TS_AUTH_KEY:                   ${{ secrets.TS_AUTH_KEY }}
       INFRA_REPO_PAT:                ${{ secrets.INFRA_REPO_PAT }}
 ```
 
@@ -1429,8 +1424,7 @@ jobs:
     secrets:
       DOCKER_HUB_USER:               ${{ secrets.DOCKER_HUB_USER }}
       DOCKER_HUB_TOKEN:              ${{ secrets.DOCKER_HUB_TOKEN }}
-      TAILSCALE_OAUTH_CLIENT_ID:     ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
-      TAILSCALE_OAUTH_CLIENT_SECRET: ${{ secrets.TAILSCALE_OAUTH_CLIENT_SECRET }}
+      TS_AUTH_KEY:                   ${{ secrets.TS_AUTH_KEY }}
       INFRA_REPO_PAT:                ${{ secrets.INFRA_REPO_PAT }}
 ```
 
@@ -1447,7 +1441,7 @@ Reusable workflows can be called cross-account **only when the workflow's repo i
    - Confirm `cash-track/.github` is public.
 2. **(Optional but recommended)** in `vokomarov/crashers-bot`: bake `php artisan migrate --force` + `php artisan webhook:set` into the container entrypoint, ship a release, verify on the droplet.
 3. **Mint the cross-org PAT.** Create a fine-grained PAT under the `vokomarov` GitHub user, scoped only to the `cash-track/infra` repo, permissions `Contents: Read and write` + `Pull requests: Read and write`, expiry 90 days. Store under both repos as `INFRA_REPO_PAT`.
-4. **Mirror the four shared secrets** (`DOCKER_HUB_*`, `TAILSCALE_OAUTH_*`) into both bot repos.
+4. **Mirror the three shared secrets** (`DOCKER_HUB_USER`, `DOCKER_HUB_TOKEN`, `TS_AUTH_KEY`) into both bot repos.
 5. **Replace `vokomarov/crashers-bot/.github/workflows/release.yml`** with the new `ship-service.yml`-calling version. Delete `DIGITALOCEAN_ACCESS_TOKEN` afterward.
 6. **Create `vokomarov/home-exporter/.github/workflows/release.yml`** (didn't exist before) using the template above.
 7. **Smoke test on a scratch tag** (`v0.0.0-test`) in each repo: confirm image push to Docker Hub, confirm PR opened against `cash-track/infra` bumping the version, confirm pre/post hooks fire on the droplet (for crashers-bot only).
@@ -1457,7 +1451,7 @@ Reusable workflows can be called cross-account **only when the workflow's repo i
 
 - [ ] `ship-service.yml` accepts `image`, `pre_deploy_command`, `post_deploy_command`, `INFRA_REPO_PAT` inputs without breaking existing cash-track-org callers (api/gateway/frontend/website still work).
 - [ ] `cash-track/.github` is public.
-- [ ] Both bot repos have `DOCKER_HUB_USER`, `DOCKER_HUB_TOKEN`, `TAILSCALE_OAUTH_CLIENT_ID`, `TAILSCALE_OAUTH_CLIENT_SECRET`, `INFRA_REPO_PAT` configured.
+- [ ] Both bot repos have `DOCKER_HUB_USER`, `DOCKER_HUB_TOKEN`, `TS_AUTH_KEY`, `INFRA_REPO_PAT` configured.
 - [ ] crashers-bot scratch-tag run: image at `vovanms/crashers_bot_api:0.0.0-test` exists on Docker Hub; PR open against `cash-track/infra` bumping `crashers_bot`; webhook is reachable post-deploy (curl `https://crashers-bot.<DOMAIN>/` returns 200).
 - [ ] crashers-bot DB migrations confirmed running (either via container entrypoint logs or post-deploy hook output in the workflow run).
 - [ ] home-exporter scratch-tag run: image at `vovanms/home_exporter:0.0.0-test` exists; PR open against `cash-track/infra` bumping `home_exporter`; metrics endpoint reachable post-deploy (`curl http://home-exporter:2112/metrics` from a sibling compose service returns 200).

@@ -49,7 +49,7 @@
 - name: Inject secrets via `op inject` (local)
   ansible.builtin.command:
     cmd: >-
-      op inject
+      op inject --force
       -i {{ render_dir }}/{{ item }}.env.tpl
       -o {{ render_dir }}/{{ item }}.env
   delegate_to: localhost
@@ -85,7 +85,7 @@
 - name: Inject secrets into config templates via `op inject` (local)
   ansible.builtin.command:
     cmd: >-
-      op inject
+      op inject --force
       -i {{ render_dir }}/{{ item.template }}
       -o {{ render_dir }}/{{ item.dest | basename }}
   delegate_to: localhost
@@ -96,7 +96,7 @@
   loop_control:
     label: "{{ item.template }}"
   changed_when: false
-  no_log: true
+  no_log: false
 
 - name: Ensure parent directories exist for secret config files on droplet
   ansible.builtin.file:

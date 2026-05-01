@@ -65,7 +65,7 @@ services:
     oom_score_adj: -200
 
   ofelia:
-    image: mcuadros/ofelia:v0.3.14
+    image: mcuadros/ofelia:0.3.22
     restart: unless-stopped
     networks: [app]
     volumes:

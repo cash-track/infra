@@ -44,7 +44,7 @@ receivers:
         chat_id: {{ op_prefix }}/alertmanager-telegram/CHAT_ID
         api_url: https://api.telegram.org
         parse_mode: HTML
-        message: '{% raw %}{{ template "telegram.cash-track.message" . }}{% endraw %}'
+        message: '{% raw %}{{ "{{ template \"telegram.cash-track.message\" . }}" }}{% endraw %}'
         send_resolved: true
 
 # Suppress lower-severity duplicates of the same alert on the same instance

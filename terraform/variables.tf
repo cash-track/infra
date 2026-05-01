@@ -58,14 +58,8 @@ variable "tailscale_tags" {
   type        = list(string)
 }
 
-variable "tailscale_oauth_client_id" {
-  description = "Tailscale OAuth client ID. Provided via TF_VAR_tailscale_oauth_client_id; not stored in tfvars."
-  type        = string
-  sensitive   = true
-}
-
-variable "tailscale_oauth_client_secret" {
-  description = "Tailscale OAuth client secret. Provided via TF_VAR_tailscale_oauth_client_secret; not stored in tfvars."
+variable "tailscale_api_key" {
+  description = "Tailscale personal API key. Provided via TF_VAR_tailscale_api_key."
   type        = string
   sensitive   = true
 }

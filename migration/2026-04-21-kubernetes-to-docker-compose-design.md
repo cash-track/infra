@@ -863,7 +863,7 @@ cash-track-prod/
 ├── cloudflare-origin-cert-potwora    attachments: origin-cert.pem, origin-key.pem
 │                                     (potwora.com.ua zone — same shape, separate
 │                                      CF zone → separate Origin Cert)
-├── tailscale                fields: OAUTH_CLIENT_ID, OAUTH_CLIENT_SECRET
+├── tailscale                fields: API_KEY (personal API key)
 ├── dockerhub                fields: USERNAME, TOKEN
 ├── do-api                   fields: TOKEN (for firewall-refresh playbook + doctl)
 └── cash-track-tfstate       fields: ACCESS_KEY_ID, SECRET_ACCESS_KEY
@@ -1023,7 +1023,7 @@ A handful of secrets live directly as GitHub org secrets because they are consum
 
 - `OP_SERVICE_ACCOUNT_TOKEN` — bootstrap root-of-trust for everything else
 - `SPACES_TFSTATE_ID`, `SPACES_TFSTATE_KEY` — Terraform backend access
-- `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET` — CI tailnet join (could live in 1Password, but CI reads org secrets more cleanly than `op`-lookups during early job steps before `op` CLI is installed)
+- `TS_AUTH_KEY` — CI tailnet join via reusable ephemeral auth key tagged `tag:ci`; generate in Tailscale admin → Keys; rotate every 90 days
 - `DOCKERHUB_TOKEN`, `DOCKERHUB_USERNAME` — Docker Hub push from service repos; mirroring the value in 1Password `dockerhub` item for operator reference
 
 Operator laptop authenticates to 1Password via the normal desktop app + `op signin`; no long-lived token on disk.
@@ -1073,7 +1073,7 @@ GitHub org: cash-track
 | Secret | Used by | Purpose |
 |---|---|---|
 | `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN` | all service repos | Docker Hub push |
-| `TS_OAUTH_CLIENT_ID`, `TS_OAUTH_SECRET` | all service repos + `infra` | Tailscale ephemeral node auth |
+| `TS_AUTH_KEY` | all service repos + `infra` | Tailscale ephemeral node auth (reusable key tagged `tag:ci`; rotate every 90 days) |
 | `OP_SERVICE_ACCOUNT_TOKEN` | `infra` only | 1Password read access for `op inject` in CI |
 | `SPACES_TFSTATE_ID`, `SPACES_TFSTATE_KEY` | `infra` only | Terraform state access |
 | `OPS_SSH_PRIVATE_KEY` | — not needed — | Auth via Tailscale SSH instead |
@@ -1172,8 +1172,7 @@ on:
       droplet_host:   { required: false, type: string,  default: "cashtrack-prod-0" }
       droplet_user:   { required: false, type: string,  default: "ops" }
     secrets:
-      TS_OAUTH_CLIENT_ID: { required: true }
-      TS_OAUTH_SECRET:    { required: true }
+      TS_AUTH_KEY: { required: true }
 
 concurrency:
   group: deploy-${{ inputs.service }}
@@ -1186,9 +1185,7 @@ jobs:
     steps:
       - uses: tailscale/github-action@v3
         with:
-          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
-          oauth-secret:    ${{ secrets.TS_OAUTH_SECRET }}
-          tags: tag:ci
+          authkey: ${{ secrets.TS_AUTH_KEY }}
       - env:
           SERVICE:        ${{ inputs.service }}
           TAG:            ${{ inputs.tag }}

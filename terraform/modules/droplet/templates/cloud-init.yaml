@@ -20,7 +20,7 @@ write_files:
     permissions: "0440"
     content: |
       # CI deploy account: may invoke only the deploy-service helper as root.
-      # Argument validation lives inside the script — sudo arg-matching is too
+      # Argument validation lives inside the script - sudo arg-matching is too
       # fragile to be the only line of defence.
       deploy ALL=(root) NOPASSWD: /opt/cashtrack/bin/deploy-service
       Defaults!/opt/cashtrack/bin/deploy-service !requiretty, env_reset
@@ -43,7 +43,7 @@ runcmd:
   - apt-get update && apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - usermod -aG docker ops
 
-  # Block Volume mount — idempotent for replacement case, robust against volume-attach race
+  # Block Volume mount - idempotent for replacement case, robust against volume-attach race
   - |
     set -e
     DEV=/dev/disk/by-id/scsi-0DO_Volume_${volume_name}
@@ -60,7 +60,7 @@ runcmd:
 
     # Key the re-entrance check off the filesystem label, not the by-id path.
     # `blkid $DEV` alone returns exit-code 2 for both "device missing" and
-    # "device empty" — ambiguous. Label lookup is unambiguous and also survives
+    # "device empty" - ambiguous. Label lookup is unambiguous and also survives
     # device-path changes across replacement.
     if ! blkid -L cashtrack-data >/dev/null 2>&1; then
       if blkid "$DEV" >/dev/null 2>&1; then
