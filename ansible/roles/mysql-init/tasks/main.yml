@@ -80,5 +80,7 @@
   # IF NOT EXISTS short-circuited. We can't cheaply distinguish "no-op" from
   # "applied", so the task is reported unchanged on success and accepted as
   # ok-on-rerun.
+  args:
+    executable: /bin/bash
   changed_when: false
   no_log: true

@@ -38,10 +38,6 @@ scrape_configs:
     static_configs:
       - targets: ["mysql-exporter:9104"]
 
-  - job_name: ofelia
-    static_configs:
-      - targets: ["ofelia:8081"]
-
   # Spiral exposes its OTEL/Prometheus metrics on container port 2112 (matches
   # the K8s `name: prometheus` port on infra/services/api/service.yml).
   - job_name: api
@@ -90,3 +86,4 @@ scrape_configs:
   # - website:      Nuxt SSR, no /metrics endpoint
   # - mysql-backup: status surfaced via node-exporter textfile collector
   #                 (`mysql_backup_last_success_timestamp_seconds`)
+  # - ofelia:       mcuadros/ofelia exposes no HTTP server or Prometheus endpoint

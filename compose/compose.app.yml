@@ -110,13 +110,12 @@ services:
     oom_score_adj: 0
 
   mysql-exporter:
-    image: prom/mysqld-exporter:v0.15.1
+    image: prom/mysqld-exporter:v0.14.0
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/mysql-exporter.env]
     depends_on:
       mysql: { condition: service_healthy }
-    command: ["--mysqld.address=mysql:3306"]
     mem_limit: 128m
     mem_reservation: 96m
     oom_score_adj: 0

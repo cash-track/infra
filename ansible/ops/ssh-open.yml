@@ -4,7 +4,8 @@
 # ops/ssh-close.yml as soon as the incident is over.
 #
 # Usage:
-#   DIGITALOCEAN_TOKEN=… ansible-playbook ops/ssh-open.yml -e ip=$(curl -s ifconfig.me)
+#   make ssh-open              # auto-detects your current public IP via ifconfig.me
+#   make ssh-open IP=1.2.3.4  # explicit override
 
 - name: Open SSH (TCP 22) for one IP on the cashtrack firewall
   hosts: localhost

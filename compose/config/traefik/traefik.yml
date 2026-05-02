@@ -13,12 +13,16 @@ entryPoints:
           permanent: true
   websecure:
     address: ":443"
+  metrics:
+    address: ":8080"
 
-# Prometheus metrics exposed on the websecure entrypoint at /metrics
-# (gated by cloudflare-only middleware via the router label on the traefik service).
+# Prometheus metrics on a dedicated internal entrypoint (port 8080, no TLS).
+# Prometheus scrapes traefik:8080 directly over the Docker bridge.
+# External access via traefik.${DOMAIN}/metrics is routed by the compose label
+# (traefik-metrics router → loadbalancer → port 8080 on this container).
 metrics:
   prometheus:
-    entryPoint: websecure
+    entryPoint: metrics
     addEntryPointsLabels: true
     addRoutersLabels: true
     addServicesLabels: true

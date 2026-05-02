@@ -3,13 +3,13 @@
 # no normalization. If a release is published as `v1.2.9`, that exact string is
 # the tag both in `.env` and in `docker pull cashtrack/api:v1.2.9`.
 versions:
-  api: "1.2.9"
-  gateway: "1.2.9"
-  frontend: "1.1.4"
-  website: "0.1.14"
-  mysql: "1.0.8"
-  mysql_backup: "0.0.5"
-  redis: "1.0.1"
+  api: "1.9.13"
+  gateway: "1.3.3"
+  frontend: "1.9.1"
+  website: "2.1.9"
+  mysql: "1.0.17"
+  mysql_backup: "0.0.11"
+  redis: "1.0.6"
   # crashers-bot and home-exporter live in repos outside the cash-track org;
   # their images are pulled from `vovanms/*` on Docker Hub (public). Tags here
   # track the upstream tag the operator wants pinned on the droplet — bumped

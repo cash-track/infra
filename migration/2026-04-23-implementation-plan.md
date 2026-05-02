@@ -815,11 +815,11 @@ Tell operator: *"Stages 1–6 done. All code written. Ready for Stage 7: first p
 
 ### Verification checklist
 
-- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker compose -f compose.core.yml ps'` — all core services `healthy` or `running`.
-- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker compose exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SHOW DATABASES"'` shows `cashtrack`, `telegram_bots`.
+- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker-core ps'` — all core services `healthy` or `running`.
+- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker-core exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SHOW DATABASES"'` shows `cashtrack`, `telegram_bots`.
 - [ ] `tailscale ssh ops@cashtrack-prod-0 'ls /mnt/data/'` shows `mysql/`, `prometheus/`, `loki/`, `tempo/`, `grafana/`, `alertmanager/`.
 - [ ] `/opt/cashtrack/secrets/*.env` exist with mode 0600.
-- [ ] Traefik dashboard reachable via `tailscale serve` if configured; else `docker compose exec traefik wget -qO- http://localhost:8080/api/rawdata` shows router configs.
+- [ ] Traefik dashboard reachable via `tailscale serve` if configured; else `tailscale ssh ops@cashtrack-prod-0 'docker-core exec traefik wget -qO- http://localhost:8080/api/rawdata'` shows router configs.
 - [ ] No plaintext secret in `/tmp/cashtrack-render/` on operator laptop (should have been wiped by the render task's "absent" file action).
 
 ### If anything fails

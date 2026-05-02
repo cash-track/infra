@@ -4,7 +4,7 @@
 # are rewritten against the Compose stack's actual scrape jobs:
 #
 #   prometheus.yml jobs: prometheus, traefik, node-exporter, mysql-exporter,
-#                        ofelia, api, gateway, loki, tempo, alertmanager,
+#                        api, gateway, loki, tempo, alertmanager,
 #                        promtail, grafana
 #
 # Frontend/website expose no metrics endpoint — their availability is covered

@@ -11,7 +11,7 @@ networks:
 
 services:
   traefik:
-    image: traefik:v3.1
+    image: traefik:v3.6.15
     restart: unless-stopped
     networks: [app]
     ports:
@@ -27,7 +27,8 @@ services:
       - traefik.http.routers.traefik-metrics.rule=Host(`traefik.${DOMAIN}`) && PathPrefix(`/metrics`)
       - traefik.http.routers.traefik-metrics.entrypoints=websecure
       - traefik.http.routers.traefik-metrics.tls=true
-      - traefik.http.routers.traefik-metrics.service=prometheus@internal
+      - traefik.http.routers.traefik-metrics.service=traefik-metrics
+      - traefik.http.services.traefik-metrics.loadbalancer.server.port=8080
       - traefik.http.routers.traefik-metrics.middlewares=cloudflare-only@file
     mem_limit: 128m
     mem_reservation: 96m
@@ -73,7 +74,6 @@ services:
     command: daemon --docker
     labels:
       - ofelia.save-folder=/var/log/ofelia
-      # Failures flow Prometheus → Alertmanager → Telegram via `ofelia_job_failures_total`.
       - ofelia.on-error=true
       - ofelia.no-overlap=true
     mem_limit: 192m

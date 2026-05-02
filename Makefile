@@ -7,13 +7,23 @@
 TF = terraform -chdir=terraform
 AP = cd ansible && ansible-playbook
 
-.PHONY: plan apply bootstrap replace deploy ssh-open ssh-close backup-verify firewall-refresh restore-to-new-volume
+.PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify firewall-refresh restore-to-new-volume
 
 plan:
 	$(TF) plan
 
 apply:
 	$(TF) apply
+
+wait-tailnet:
+	@HOST=$$($(TF) output -raw tailscale_hostname) && \
+	echo "Waiting for $$HOST to appear on Tailnet (5 min timeout)..." && \
+	for i in $$(seq 1 60); do \
+		tailscale status 2>/dev/null | grep -q "$$HOST" && echo "$$HOST is online." && exit 0; \
+		echo "  [$$(date +%H:%M:%S)] not yet (attempt $$i/60)"; \
+		sleep 5; \
+	done; \
+	echo "ERROR: $$HOST did not join Tailnet within 5 minutes." && exit 1
 
 bootstrap:
 	$(AP) site.yml
@@ -27,12 +37,16 @@ deploy:
 	$(AP) site.yml --tags compose
 
 ssh-open:
-	@test -n "$(IP)" || { echo "Usage: make ssh-open IP=<addr>"; exit 1; }
-	$(AP) ops/ssh-open.yml -e ip=$(IP)
+	@IP=$${IP:-$$(curl -sf https://ifconfig.me)} && \
+	test -n "$$IP" || { echo "ERROR: could not detect public IP; set IP=<addr>"; exit 1; } && \
+	echo "Opening SSH for $$IP ..." && \
+	cd ansible && ansible-playbook ops/ssh-open.yml -e ip=$$IP
 
 ssh-close:
-	@test -n "$(IP)" || { echo "Usage: make ssh-close IP=<addr>"; exit 1; }
-	$(AP) ops/ssh-close.yml -e ip=$(IP)
+	@IP=$${IP:-$$(curl -sf https://ifconfig.me)} && \
+	test -n "$$IP" || { echo "ERROR: could not detect public IP; set IP=<addr>"; exit 1; } && \
+	echo "Closing SSH for $$IP ..." && \
+	cd ansible && ansible-playbook ops/ssh-close.yml -e ip=$$IP
 
 backup-verify:
 	$(AP) ops/backup-restore.yml -e backup_id=latest -e verify_only=true

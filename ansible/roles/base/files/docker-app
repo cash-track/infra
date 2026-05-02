@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+exec docker compose \
+  -f /opt/cashtrack/compose.core.yml \
+  -f /opt/cashtrack/compose.app.yml \
+  "$@"

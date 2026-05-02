@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+HOST="ops@cashtrack-prod-0"
+
+exec tailscale ssh "$HOST" "$@"

@@ -23,7 +23,6 @@ distributor:
 
 ingester:
   max_block_duration: 5m
-  max_bytes_per_trace: 5000000   # 5 MB hard cap; oversize traces dropped at ingest
 
 compactor:
   compaction:
@@ -43,6 +42,5 @@ storage:
 # single-droplet deploy.
 
 overrides:
-  defaults:
-    ingestion:
-      max_traces_per_user: 50000
+  max_traces_per_user: 50000
+  max_bytes_per_trace: 5000000

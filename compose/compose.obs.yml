@@ -111,6 +111,12 @@ services:
       - /mnt/data/tempo:/var/tempo
       - ./config/tempo/tempo.yml:/etc/tempo.yaml:ro
     command: ["-config.file=/etc/tempo.yaml"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3200/ready >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      start_period: 60s
+      retries: 10
     mem_limit: 640m
     mem_reservation: 512m
     oom_score_adj: 500

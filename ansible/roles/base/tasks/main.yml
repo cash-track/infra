@@ -125,3 +125,36 @@
   ansible.builtin.systemd:
     name: postreboot-smoke.service
     enabled: true
+
+# --- Shell convenience ---------------------------------------------------
+- name: Change to project dir on root login
+  ansible.builtin.lineinfile:
+    path: /root/.profile
+    line: "cd /opt/cashtrack"
+    create: true
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Change to project dir on ops login
+  ansible.builtin.lineinfile:
+    path: /home/ops/.profile
+    line: "cd /opt/cashtrack"
+    create: true
+    owner: ops
+    group: ops
+    mode: "0644"
+
+- name: Install docker-* compose shorthand scripts
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - docker-core
+    - docker-app
+    - docker-obs
+    - docker-telegram
+    - docker-all

@@ -42,6 +42,16 @@
     group: root
     mode: "0755"
 
+- name: Prune stopped containers
+  ansible.builtin.command:
+    cmd: docker container prune -f
+  changed_when: false
+
+- name: Prune unused networks
+  ansible.builtin.command:
+    cmd: docker network prune -f
+  changed_when: false
+
 - name: Compose up (pull missing, remove orphans)
   community.docker.docker_compose_v2:
     project_src: "{{ droplet_project_dir }}"

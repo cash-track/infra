@@ -40,3 +40,15 @@ Use devops-engineer, sre-engineer, terraform-engineer, terraform-skill skills.
 
 Output end result in `./infra/migration/` directory for review.
 
+## Periodic Tasks
+
+### Every 90 days
+
+- Rotate Tailscale API key (1Password + GitHub)
+
+
+## Pending Problems
+
+- Dedicated DB user for `crashers-bot`
+
+
