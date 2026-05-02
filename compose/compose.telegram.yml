@@ -25,7 +25,7 @@ services:
       mysql: { condition: service_healthy }
       redis: { condition: service_started }
     healthcheck:
-      test: ["CMD-SHELL", "wget --spider -q http://127.0.0.1:8090/"]
+      test: ["CMD-SHELL", "curl -sf http://127.0.0.1:8090/"]
       interval: 30s
       timeout: 5s
       retries: 5
@@ -61,7 +61,7 @@ services:
       # `secrets/` because telegramChatId + probe host come from 1Password.
       - ./secrets/home-exporter/config.yml:/app/config/config.yml:ro
     healthcheck:
-      test: ["CMD-SHELL", "bash -c '</dev/tcp/127.0.0.1/2112'"]
+      test: ["CMD-SHELL", "nc -z 127.0.0.1 2112"]
       interval: 30s
       timeout: 5s
       retries: 5
