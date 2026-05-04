@@ -17,6 +17,10 @@ versions:
   # the org `ship-service.yml` workflow.
   crashers_bot: "1.3.3"
   home_exporter: "0.0.4"
+  # vovanms/wordpress-backup image, used by the potwora-backup service.
+  # Built from potwora/deploy/Dockerfile.backup and pushed manually
+  # (same pattern as crashers_bot / home_exporter).
+  potwora_backup: "1.0.1"
 
 retention:
   prometheus: "7d"
@@ -35,6 +39,7 @@ compose_files:
   - compose.app.yml
   - compose.obs.yml
   - compose.telegram.yml
+  - compose.potwora.yml
 
 # Per-service env files rendered by compose-render into /opt/cashtrack/secrets/<name>.env.
 # Bare names (no `.env`) — the role appends the suffix at template-load and copy time.
@@ -50,6 +55,8 @@ secret_files:
   - grafana
   - crashers-bot
   - home-exporter
+  - potwora
+  - potwora-backup
 
 # Cloudflare Origin Certificates rendered into Traefik's config dir. One entry
 # per CF zone — each zone has its own Origin Certificate (CF issues per-zone),
@@ -97,3 +104,4 @@ volume_subdir_owners:
   tempo: 10001
   grafana: 472
   alertmanager: 65534
+  potwora: 33  # www-data; matches K8s fsGroup: 33 on serversideup/php image

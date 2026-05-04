@@ -7,7 +7,7 @@
 TF = terraform -chdir=terraform
 AP = cd ansible && ansible-playbook
 
-.PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify firewall-refresh restore-to-new-volume
+.PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify firewall-refresh traefik-cf-refresh restore-to-new-volume
 
 plan:
 	$(TF) plan
@@ -53,6 +53,9 @@ backup-verify:
 
 firewall-refresh:
 	$(AP) ops/firewall-refresh-cf.yml
+
+traefik-cf-refresh:
+	$(AP) ops/traefik-refresh-cf.yml
 
 restore-to-new-volume:
 	./scripts/restore-to-new-volume.sh

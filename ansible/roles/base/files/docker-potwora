@@ -2,8 +2,5 @@
 set -euo pipefail
 exec docker compose \
   -f /opt/cashtrack/compose.core.yml \
-  -f /opt/cashtrack/compose.app.yml \
-  -f /opt/cashtrack/compose.obs.yml \
-  -f /opt/cashtrack/compose.telegram.yml \
   -f /opt/cashtrack/compose.potwora.yml \
   "$@"

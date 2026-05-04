@@ -1,0 +1,64 @@
+name: cashtrack
+
+# WordPress site for potwora.com.ua. Files live on the Block Volume under
+# /mnt/data/potwora (mounted as /var/www/html inside the container — same
+# layout as the K8s PVC). DB is the shared mysql instance with an isolated
+# `potwora` database and dedicated user (see ansible/roles/mysql-init/vars/databases.yml).
+#
+# Image: serversideup/php:8.1-fpm-apache (Apache + PHP-FPM, listens on 8080).
+# Same image used in K8s StatefulSet — no code changes needed for migration.
+#
+# Backup: potwora-backup runs monthly (Ofelia, 1st of month at 02:00 UTC).
+# It dumps the DB + archives website files into a single tar and uploads to
+# the `wp-backups-storage` Spaces bucket. Separate from the cash-track backup
+# pipeline (different bucket, different retention: keep last 6 months).
+# Restore: ansible/ops/backup-restore-potwora.yml
+
+networks:
+  app:
+    driver: bridge
+    name: cashtrack-app
+
+services:
+  potwora:
+    image: serversideup/php:8.1-fpm-apache
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/potwora.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    volumes:
+      # Block Volume persists across droplet replacements.
+      # WordPress code lives at /mnt/data/potwora/public (K8s layout preserved).
+      - /mnt/data/potwora:/var/www/html
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.potwora.rule=Host(`potwora.com.ua`) || Host(`www.potwora.com.ua`)
+      - traefik.http.routers.potwora.entrypoints=websecure
+      - traefik.http.routers.potwora.tls=true
+      - traefik.http.services.potwora.loadbalancer.server.port=8080
+      - traefik.http.routers.potwora.middlewares=cloudflare-only@file
+    mem_limit: 512m
+    mem_reservation: 256m
+    oom_score_adj: 0
+
+  potwora-backup:
+    image: vovanms/wordpress-backup:${VERSION_POTWORA_BACKUP}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/potwora-backup.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    volumes:
+      # Read-only: backup reads files, never writes. Restore is done by the
+      # Ansible playbook (ops/backup-restore-potwora.yml) directly on the host.
+      - /mnt/data/potwora:/var/www/html:ro
+    command: ["tail", "-f", "/dev/null"]
+    labels:
+      # Monthly backup: 1st of month at 02:00 UTC. Keep last 6 (backup.sh handles purge).
+      - ofelia.enabled=true
+      - ofelia.job-exec.potwora-backup.schedule=0 0 2 1 * *
+      - ofelia.job-exec.potwora-backup.command=/scripts/backup.sh
+    mem_limit: 192m
+    mem_reservation: 128m
+    oom_score_adj: 0

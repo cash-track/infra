@@ -124,7 +124,7 @@ Step 1: stop scheduled jobs (Ofelia + mysql-backup) on the droplet so nothing
         writes to the suspect volume mid-recovery. Run on the droplet:
 
   tailscale ssh ops@cashtrack-prod-0 \\
-    "cd /opt/cashtrack && docker compose stop ofelia mysql-backup"
+    "cd /opt/cashtrack && docker compose -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml stop ofelia mysql-backup"
 
 EOF
   confirm "Done?" "done"
@@ -214,14 +214,14 @@ EOF
 Restore complete.
 
 Final checks (do these now, before declaring the incident resolved):
-  • docker compose ps                       — all healthy on the droplet
+  • docker compose -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml ps  — all healthy on the droplet
   • curl https://api.cash-track.app/healthcheck
   • MySQL row counts vs counts_before in playbook output
   • Grafana: Backup freshness, MySQL connection count, api p95
   • cashtrack_postreboot_check_ok == 1
   • Restart Ofelia + mysql-backup:
       tailscale ssh ops@cashtrack-prod-0 \\
-        "cd /opt/cashtrack && docker compose start ofelia mysql-backup"
+        "cd /opt/cashtrack && docker compose -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml start ofelia mysql-backup"
 
 Postmortem inputs to capture: snapshot id (${snapshot_name}), backup key
 (${BACKUP_ID}), volume swap timeline, any data loss between RPO and incident.

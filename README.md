@@ -15,6 +15,8 @@ The previous Kubernetes documentation is preserved in `README-kubernetes.md`; th
 
 ## Day-to-day
 
+Working machine must be connected to Tailscale before calling any operational commands.
+
 `make plan`, `make apply`, `make deploy` — full operational reference is filled in once the cutover is complete.
 
 ### Droplet shell
@@ -41,9 +43,10 @@ Five wrapper scripts are installed to `/usr/local/bin/` on the droplet. Each acc
 | `docker-app` | `compose.core.yml` + `compose.app.yml` |
 | `docker-obs` | `compose.obs.yml` |
 | `docker-telegram` | `compose.core.yml` + `compose.telegram.yml` |
-| `docker-all` | all four |
+| `docker-potwora` | `compose.core.yml` + `compose.potwora.yml` |
+| `docker-all` | all five |
 
-`docker-app` and `docker-telegram` include `compose.core.yml` because their services declare `depends_on: mysql/redis`. `docker-obs` is self-contained.
+`docker-app`, `docker-telegram`, and `docker-potwora` include `compose.core.yml` because their services declare `depends_on: mysql/redis`. `docker-obs` is self-contained.
 
 Examples:
 

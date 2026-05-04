@@ -1,0 +1,64 @@
+---
+# Refresh the Cloudflare IP allowlist in Traefik's cloudflare-only middleware.
+#
+# Fetches the live CF IPv4 + IPv6 CIDR lists, renders dynamic.yml from the
+# Jinja2 template, writes it to the local repo copy, and deploys it to the
+# droplet. Traefik reloads automatically via its file provider — no restart
+# needed.
+#
+# Cadence: run whenever CF publishes new ranges (rare, ~1-2/year), or on
+# demand after a new droplet bootstrap. Wire to a cron or scheduled agent
+# for hands-off updates.
+#
+# Usage:
+#   ansible-playbook ops/traefik-refresh-cf.yml          # refresh + deploy
+#   ansible-playbook ops/traefik-refresh-cf.yml --check  # dry-run (no deploy)
+
+- name: Fetch Cloudflare IPs and render dynamic.yml locally
+  hosts: localhost
+  gather_facts: false
+  vars:
+    local_dynamic_yml: "{{ playbook_dir }}/../../compose/config/traefik/dynamic.yml"
+
+  tasks:
+    - name: Fetch Cloudflare IPv4 ranges
+      ansible.builtin.uri:
+        url: https://www.cloudflare.com/ips-v4
+        return_content: true
+      register: cf_ipv4_raw
+
+    - name: Fetch Cloudflare IPv6 ranges
+      ansible.builtin.uri:
+        url: https://www.cloudflare.com/ips-v6
+        return_content: true
+      register: cf_ipv6_raw
+
+    - name: Build combined CF source range
+      ansible.builtin.set_fact:
+        cf_source_range: >-
+          {{ (cf_ipv4_raw.content.splitlines() + cf_ipv6_raw.content.splitlines())
+             | select | list }}
+
+    - name: Render dynamic.yml from template
+      ansible.builtin.template:
+        src: templates/traefik-dynamic.yml.j2
+        dest: "{{ local_dynamic_yml }}"
+        mode: "0644"
+
+- name: Deploy updated dynamic.yml to droplet
+  hosts: prod
+  become: true
+  vars:
+    local_dynamic_yml: "{{ playbook_dir }}/../../compose/config/traefik/dynamic.yml"
+    droplet_dynamic_yml: /opt/cashtrack/config/traefik/dynamic.yml
+
+  tasks:
+    - name: Ship dynamic.yml to droplet
+      ansible.builtin.copy:
+        src: "{{ local_dynamic_yml }}"
+        dest: "{{ droplet_dynamic_yml }}"
+        owner: root
+        group: root
+        mode: "0644"
+      # Traefik's file provider watches /etc/traefik/ and reloads on any change.
+      # No explicit restart needed.

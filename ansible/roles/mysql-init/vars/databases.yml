@@ -15,6 +15,11 @@ app_users:
     password_op_ref: "op://cash-track-prod/crashers-bot-mysql/MYSQL_PASSWORD"
     databases:
       - crashers_bot
+  - name: potwora
+    user_op_ref: "op://cash-track-prod/potwora-mysql/MYSQL_USER"
+    password_op_ref: "op://cash-track-prod/potwora-mysql/MYSQL_PASSWORD"
+    databases:
+      - potwora
 
 # Monitoring users get read-only global grants (PROCESS, REPLICATION CLIENT,
 # SELECT ON *.*) instead of ALL PRIVILEGES on a specific database. Username is

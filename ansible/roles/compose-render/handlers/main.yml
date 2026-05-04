@@ -89,6 +89,20 @@
     services: [home-exporter]
     state: restarted
 
+- name: Restart potwora
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [potwora]
+    state: restarted
+
+- name: Restart potwora-backup
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [potwora-backup]
+    state: restarted
+
 - name: Restart traefik
   community.docker.docker_compose_v2:
     project_src: "{{ droplet_project_dir }}"

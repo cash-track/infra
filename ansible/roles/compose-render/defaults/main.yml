@@ -27,6 +27,8 @@ secret_files:
   - grafana
   - crashers-bot
   - home-exporter
+  - potwora
+  - potwora-backup
 
 # Non-env secret artefacts — config files that mix structural YAML with op://
 # references. Each entry: a Jinja template under `templates/`, a destination

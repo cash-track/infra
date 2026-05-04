@@ -1,0 +1,261 @@
+---
+# Restore a WordPress backup from the `wp-backups-storage` Spaces bucket.
+# Restores BOTH the MySQL database AND the website files on the Block Volume.
+#
+# Destructive: stops the potwora container during file restore, overwrites
+# /mnt/data/potwora/public, and replaces all rows in the potwora database.
+# Guard with operator confirmation (no --check mode here by design).
+#
+# Usage:
+#   ansible-playbook ops/backup-restore-potwora.yml -e backup_id=backup-2026-05-01_02-00-00.tar.gz
+#   ansible-playbook ops/backup-restore-potwora.yml -e backup_id=latest
+#   ansible-playbook ops/backup-restore-potwora.yml -e backup_id=latest -e verify_only=true
+#
+# `verify_only=true` resolves the latest object key, prints its metadata,
+# and exits without modifying MySQL or the volume.
+
+- name: Restore potwora backup
+  hosts: prod
+  become: true
+  vars_files:
+    - ../group_vars/all/main.yml
+  vars:
+    bucket: "wp-backups-storage"
+    s3_endpoint: "https://ams3.digitaloceanspaces.com"
+    droplet_project_dir: /opt/cashtrack
+    potwora_volume: /mnt/data/potwora
+    mysql_root_password_op_ref: "op://cash-track-prod/mysql/MYSQL_ROOT_PASSWORD"
+    mysql_container: cashtrack-mysql-1
+    backup_container: cashtrack-potwora-backup-1
+    compose_args: "-f compose.core.yml -f compose.potwora.yml"
+    verify_table: wp_posts
+  pre_tasks:
+    - name: Resolve mysql root password from 1Password
+      ansible.builtin.command:
+        cmd: "op read {{ mysql_root_password_op_ref }}"
+      delegate_to: localhost
+      become: false
+      environment:
+        OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+      register: potwora_restore_root_pw
+      changed_when: false
+      no_log: true
+
+    - name: Validate backup_id
+      ansible.builtin.assert:
+        that: backup_id is defined and backup_id | length > 0
+        fail_msg: "Pass `-e backup_id=<filename>` or `-e backup_id=latest`."
+
+    - name: Confirm operator intent
+      ansible.builtin.pause:
+        prompt: |
+          About to restore '{{ backup_id }}' from s3://{{ bucket }}/ onto
+          {{ inventory_hostname }}.
+          This will:
+            • STOP the potwora container
+            • OVERWRITE /mnt/data/potwora/public with the archived files
+            • REPLACE all tables in the potwora database
+          Type 'restore' to continue, anything else to abort.
+      register: potwora_restore_confirm
+      when: not (verify_only | default(false) | bool)
+
+    - name: Abort if not confirmed
+      ansible.builtin.fail:
+        msg: "Operator did not confirm — aborting."
+      when:
+        - not (verify_only | default(false) | bool)
+        - potwora_restore_confirm.user_input | default('') != 'restore'
+
+  tasks:
+    - name: Resolve `latest` to a concrete backup filename
+      ansible.builtin.shell: |
+        set -euo pipefail
+        key=$(docker compose {{ compose_args }} exec -T potwora-backup \
+          bash -c \
+          's3cmd ls "s3://${BACKUP_BUCKET}/wordpress-backups/backup-" \
+            --access_key="$ACCESS_KEY" \
+            --secret_key="$SECRET_KEY" \
+            --host="$S3_ENDPOINT" \
+            --host-bucket="%{bucket}.${S3_ENDPOINT}" \
+            --region="$S3_REGION" \
+            --no-progress \
+            | awk '"'"'{print $4}'"'"' | sort | tail -n1')
+        [[ -n "$key" ]] || { echo "No backups found in s3://{{ bucket }}/wordpress-backups/" >&2; exit 1; }
+        basename "$key"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+        executable: /bin/bash
+      register: potwora_latest_key
+      changed_when: false
+      when: backup_id == 'latest'
+
+    - name: Pin resolved backup filename
+      ansible.builtin.set_fact:
+        resolved_backup: >-
+          {{ potwora_latest_key.stdout if backup_id == 'latest' else backup_id }}
+
+    - name: Read backup metadata for verify_only mode
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose {{ compose_args }} exec -T potwora-backup \
+          bash -c \
+          's3cmd ls "s3://${BACKUP_BUCKET}/wordpress-backups/{{ resolved_backup }}" \
+            --access_key="$ACCESS_KEY" \
+            --secret_key="$SECRET_KEY" \
+            --host="$S3_ENDPOINT" \
+            --host-bucket="%{bucket}.${S3_ENDPOINT}" \
+            --region="$S3_REGION" \
+            --no-progress'
+      args:
+        chdir: "{{ droplet_project_dir }}"
+        executable: /bin/bash
+      register: potwora_verify_listing
+      changed_when: false
+      when: verify_only | default(false) | bool
+
+    - name: Verify-only summary
+      ansible.builtin.debug:
+        msg:
+          - "verify_only=true — skipping restore."
+          - "resolved backup: {{ resolved_backup }}"
+          - "object listing: {{ potwora_verify_listing.stdout | default('(unknown)') }}"
+      when: verify_only | default(false) | bool
+
+    - name: End play in verify_only mode
+      ansible.builtin.meta: end_play
+      when: verify_only | default(false) | bool
+
+    - name: Download and extract backup inside potwora-backup container
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - compose.core.yml
+          - -f
+          - compose.potwora.yml
+          - exec
+          - -T
+          - potwora-backup
+          - /scripts/restore.sh
+          - "{{ resolved_backup }}"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+      changed_when: true
+
+    - name: Pre-restore row count in potwora database
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose {{ compose_args }} exec -T -e MYSQL_PWD mysql \
+          mysql -uroot --batch --skip-column-names potwora \
+          -e "SELECT '{{ verify_table }}', COUNT(*) FROM \`{{ verify_table }}\`;"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+        executable: /bin/bash
+      environment:
+        MYSQL_PWD: "{{ potwora_restore_root_pw.stdout }}"
+      register: potwora_count_before
+      changed_when: false
+      ignore_errors: true
+      no_log: true
+
+    - name: Restore database (stream SQL from container into mysql)
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose {{ compose_args }} exec -T potwora-backup \
+          cat /tmp/wp-restore/database.sql \
+          | docker compose {{ compose_args }} exec -T -e MYSQL_PWD mysql \
+              mysql -uroot potwora
+      args:
+        chdir: "{{ droplet_project_dir }}"
+        executable: /bin/bash
+      environment:
+        MYSQL_PWD: "{{ potwora_restore_root_pw.stdout }}"
+      changed_when: true
+      no_log: true
+
+    - name: Post-restore row count
+      ansible.builtin.shell: |
+        set -euo pipefail
+        docker compose {{ compose_args }} exec -T -e MYSQL_PWD mysql \
+          mysql -uroot --batch --skip-column-names potwora \
+          -e "SELECT '{{ verify_table }}', COUNT(*) FROM \`{{ verify_table }}\`;"
+      args:
+        chdir: "{{ droplet_project_dir }}"
+        executable: /bin/bash
+      environment:
+        MYSQL_PWD: "{{ potwora_restore_root_pw.stdout }}"
+      register: potwora_count_after
+      changed_when: false
+      no_log: true
+
+    - name: Stop potwora container before file restore
+      community.docker.docker_compose_v2:
+        project_src: "{{ droplet_project_dir }}"
+        files:
+          - compose.core.yml
+          - compose.potwora.yml
+        services: [potwora]
+        state: stopped
+      changed_when: true
+
+    - name: Copy website-files.tar.gz from container to host
+      ansible.builtin.command:
+        argv:
+          - docker
+          - cp
+          - "{{ backup_container }}:/tmp/wp-restore/website-files.tar.gz"
+          - /tmp/potwora-website-files.tar.gz
+      changed_when: true
+
+    - name: Ensure volume public directory exists
+      ansible.builtin.file:
+        path: "{{ potwora_volume }}/public"
+        state: directory
+        owner: "33"
+        group: "33"
+        mode: "0755"
+
+    - name: Extract website files into volume
+      ansible.builtin.command:
+        argv:
+          - tar
+          - -xzf
+          - /tmp/potwora-website-files.tar.gz
+          - -C
+          - "{{ potwora_volume }}/public"
+          - --overwrite
+      changed_when: true
+
+    - name: Fix file ownership (www-data uid 33, matches K8s fsGroup)
+      ansible.builtin.command:
+        argv:
+          - chown
+          - -R
+          - "33:33"
+          - "{{ potwora_volume }}/public"
+      changed_when: true
+
+    - name: Start potwora container
+      community.docker.docker_compose_v2:
+        project_src: "{{ droplet_project_dir }}"
+        files:
+          - compose.core.yml
+          - compose.potwora.yml
+        services: [potwora]
+        state: present
+      changed_when: true
+
+    - name: Clean up temp files
+      ansible.builtin.file:
+        path: /tmp/potwora-website-files.tar.gz
+        state: absent
+      changed_when: false
+
+    - name: Restore complete — review row-count delta
+      ansible.builtin.debug:
+        msg:
+          - "Restored backup: {{ resolved_backup }}"
+          - "DB before:  {{ potwora_count_before.stdout | default('(no data)') }}"
+          - "DB after:   {{ potwora_count_after.stdout }}"
+          - "Files extracted to: {{ potwora_volume }}/public"

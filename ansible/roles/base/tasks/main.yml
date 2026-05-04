@@ -157,4 +157,5 @@
     - docker-app
     - docker-obs
     - docker-telegram
+    - docker-potwora
     - docker-all
