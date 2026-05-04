@@ -20,7 +20,7 @@ versions:
   # vovanms/wordpress-backup image, used by the potwora-backup service.
   # Built from potwora/deploy/Dockerfile.backup and pushed manually
   # (same pattern as crashers_bot / home_exporter).
-  potwora_backup: "1.0.1"
+  potwora_backup: "1.0.3"
 
 retention:
   prometheus: "7d"
