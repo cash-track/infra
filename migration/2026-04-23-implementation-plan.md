@@ -20,7 +20,7 @@
 
 | # | Stage | Who | Context-window fit | Produces |
 |---|---|---|---|---|
-| 0 | Prerequisites: Spaces bucket, 1Password vault, org secrets | **[OPERATOR-ONLY]** | N/A | tfstate Spaces bucket, 11 vault items, 7 org secrets |
+| 0 | Prerequisites: Spaces bucket, 1Password vault, org secrets | **[OPERATOR-ONLY]** | N/A | tfstate Spaces bucket, 13 vault items, 7 org secrets |
 | 1 | Repo scaffold + Terraform code | [CLAUDE CODE] | 1 session | `terraform/**`, Makefile, `.gitignore`, README rename |
 | 2 | Terraform init + plan review | **[OPERATOR-ONLY]** | N/A | `terraform plan` output, committed plan-review notes |
 | 3 | Ansible scaffold + base/docker/tailscale/volume roles | [CLAUDE CODE] | 1 session | `ansible/` with 4 roles |
@@ -82,11 +82,11 @@
    done
    ```
 
-   **Vault catalog — 12 items.** Per-vault dedup decisions:
+   **Vault catalog — 13 items.** Per-vault dedup decisions:
    - **One `common` vault** holds every secret consumed by 2+ services (CAPTCHA, Google OAuth, mail, S3) so a key rotation touches one place. Values match the existing `common-secret` 1:1.
    - **No `gateway` vault** — gateway only needs `CAPTCHA_SECRET_KEY`, which comes from `common`.
    - **No `mysql-backup` vault** — mysql-backup pulls `MYSQL_ROOT_PASSWORD`+`MYSQL_DATABASE` from `mysql` and `S3_KEY`+`S3_SECRET` from `common`. Bucket name (`cash-track-backups`) is non-secret and lives in the `.env` template literal.
-   - **No `mysql-app-users` vault** — the cluster runs a single shared app user (`cashtrack`) granted on every app DB; that user's credentials live in `mysql.MYSQL_USER` / `mysql.MYSQL_PASSWORD` and are reused by api, crashers-bot, home-exporter. `mysql-init` grants the user on each database listed in `databases.yml`. (Per-app users is a future hardening step; deferred to keep the cutover small.)
+   - **Dedicated MySQL users per service** — each service gets its own MySQL user scoped to its own database(s). The `mysql` vault item (`MYSQL_USER`/`MYSQL_PASSWORD`) is used by api only (`cashtrack` DB). crashers-bot gets a separate `crashers-bot-mysql` vault item (`MYSQL_USER`/`MYSQL_PASSWORD`) used by crashers-bot only (`telegram_bots` DB). `mysql-init` creates each user and grants `ALL PRIVILEGES` only on its assigned databases. Adding a new application = new vault item + new entry in `databases.yml`.
    - **Two telegram vaults** — `crashers-bot` and `home-exporter` are separate K8s deployments with separate secrets; mirroring that 1:1 in 1Password keeps audit logs and rotations app-scoped.
    - `alertmanager-telegram` stays its own vault — different bot, different chat, monitoring-scoped.
 
@@ -94,7 +94,8 @@
    |----------------------------|---|---|---|
    | + `api`                    | `JWT_SECRET`, `JWT_PUBLIC_KEY`, `JWT_PRIVATE_KEY`, `ENCRYPTER_KEY`, `DB_ENCRYPTER_KEY` | `cash-track/api-secret` | api |
    | + `common`                 | `CAPTCHA_CLIENT_KEY`, `CAPTCHA_SECRET_KEY`, `GOOGLE_API_AUTH_PROVIDER_X509_CERT_URL`, `GOOGLE_API_AUTH_URI`, `GOOGLE_API_CLIENT_ID`, `GOOGLE_API_CLIENT_SECRET`, `GOOGLE_API_PROJECT_ID`, `GOOGLE_API_REDIRECT_URI`, `GOOGLE_API_TOKEN_URI`, `MAIL_HOST`, `MAIL_PASSWORD`, `MAIL_PORT`, `MAIL_USERNAME`, `S3_ENDPOINT`, `S3_KEY`, `S3_REGION`, `S3_SECRET` | `cash-track/common-secret` | api, gateway, website, mysql-backup |
-   | + `mysql`                  | `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | `cash-track/mysql-secret` | mysql, mysql-backup, mysql-init, api, crashers-bot, home-exporter |
+   | + `mysql`                  | `MYSQL_DATABASE`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_ROOT_PASSWORD` | `cash-track/mysql-secret` | mysql, mysql-backup, mysql-init, api |
+   | + `crashers-bot-mysql`     | `MYSQL_USER`, `MYSQL_PASSWORD` | Generate new credentials (not from K8s — this is a new dedicated user) | crashers-bot |
    | + `mysql-exporter`         | `DATA_SOURCE_NAME` (`exporter:<pw>@tcp(mysql:3306)/`) | `cash-track/mysql-exporter-secret` | mysql-exporter |
    | + `alertmanager-telegram`  | `BOT_TOKEN`, `CHAT_ID` | New (BotFather + private channel) | alertmanager |
    | `grafana`                  | `ADMIN_PASSWORD`, `SMTP_PASSWORD` | Existing Grafana if migrating; else generate | grafana |
@@ -138,8 +139,8 @@
 ### Verification checklist
 
 - [x] `doctl spaces ls` shows `cash-track-tfstate` in `ams3`, private.
-- [x] `op vault get cash-track-prod` succeeds and lists 12 items.
-- [x] All 12 items have populated fields (open each in desktop app, eyeball). `crashers-bot` and `home-exporter` field lists are filled in from their K8s secrets.
+- [x] `op vault get cash-track-prod` succeeds and lists 13 items.
+- [x] All 13 items have populated fields (open each in desktop app, eyeball). `crashers-bot` and `home-exporter` field lists are filled in from their K8s secrets. `crashers-bot-mysql` has freshly generated credentials (not from K8s).
 - [x] `gh secret list --org cash-track` (or org Settings UI) shows the 7 org secrets above.
 - [x] Service Account token is saved in the operator's personal 1Password (offline break-glass copy) and as `OP_SERVICE_ACCOUNT_TOKEN` GitHub org secret.
 - [x] `op item get cash-track-tfstate --vault cash-track-prod --field ACCESS_KEY_ID` returns the Spaces access key from step 1 (used to render `backend.hcl` in Stage 2).
@@ -500,7 +501,7 @@ Frontend has no secrets in K8s (only `common-config` env vars), so no `frontend.
     S3_KEY={{ op_prefix }}/common/S3_KEY
     S3_SECRET={{ op_prefix }}/common/S3_SECRET
 
-    # mysql-secret — single shared app user
+    # mysql-secret — api's dedicated MySQL user (cashtrack DB only)
     DB_HOST=mysql:3306
     DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
     DB_USER={{ op_prefix }}/mysql/MYSQL_USER
@@ -571,16 +572,21 @@ No operator action. Proceed to Stage 5.
 
 ### Action items
 
-1. **Write `mysql-init/vars/databases.yml`** — single shared app user, multiple databases (matches K8s reality; per-app users deferred):
+1. **Write `mysql-init/vars/databases.yml`** — one entry per service, each with its own vault references and the list of databases it owns:
    ```yaml
-   app_user:
-     user_op_ref:     "op://cash-track-prod/mysql/MYSQL_USER"
-     password_op_ref: "op://cash-track-prod/mysql/MYSQL_PASSWORD"
-   databases:
-     - cashtrack
-     - telegram_bots
+   app_users:
+     - name: cashtrack
+       user_op_ref:     "op://cash-track-prod/mysql/MYSQL_USER"
+       password_op_ref: "op://cash-track-prod/mysql/MYSQL_PASSWORD"
+       databases:
+         - cashtrack
+     - name: crashers-bot
+       user_op_ref:     "op://cash-track-prod/crashers-bot-mysql/MYSQL_USER"
+       password_op_ref: "op://cash-track-prod/crashers-bot-mysql/MYSQL_PASSWORD"
+       databases:
+         - telegram_bots
    ```
-2. **Write `mysql-init/tasks/main.yml`:** uses `community.mysql.mysql_db` and `community.mysql.mysql_user`, running against the mysql container via `delegate_to: "{{ inventory_hostname }}"` + `ansible_python_interpreter` switch. Requires `MYSQL_ROOT_PASSWORD` in the environment (rendered into a temp file in `compose-render`). Resolve `app_user` user/password via `op read` in a `delegate_to: localhost` pre-task with `no_log: true`. For each `databases[*]`: create the database idempotently and grant the resolved app user `ALL PRIVILEGES` on `<db>.*`. Adding a new application = add its DB name to the list and re-run; no new vault item, no new user.
+2. **Write `mysql-init/tasks/main.yml`:** talks to mysql via `docker exec` (port 3306 is not published to host). Resolves root password via `op read` with `no_log: true`. Loops over `app_users` to resolve each user's username and password via `op read` (two separate loop tasks, `no_log: true`), then combines them into `mysql_user_credentials` via `set_fact`. Runs a single SQL heredoc that for each user: `CREATE USER IF NOT EXISTS`, `ALTER USER` (re-apply password idempotently), `CREATE DATABASE IF NOT EXISTS` for each of the user's databases, `GRANT ALL PRIVILEGES` on each database to that user only. `FLUSH PRIVILEGES` at the end. Adding a new application = append an entry to `app_users`, create the vault item, re-run `site.yml --tags mysql`.
 3. **Write `compose-render/defaults/main.yml`:**
    ```yaml
    secret_files:
@@ -815,12 +821,12 @@ Tell operator: *"Stages 1–6 done. All code written. Ready for Stage 7: first p
 
 ### Verification checklist
 
-- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker-core ps'` — all core services `healthy` or `running`.
-- [ ] `tailscale ssh ops@cashtrack-prod-0 'docker-core exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SHOW DATABASES"'` shows `cashtrack`, `telegram_bots`.
-- [ ] `tailscale ssh ops@cashtrack-prod-0 'ls /mnt/data/'` shows `mysql/`, `prometheus/`, `loki/`, `tempo/`, `grafana/`, `alertmanager/`.
-- [ ] `/opt/cashtrack/secrets/*.env` exist with mode 0600.
-- [ ] Traefik dashboard reachable via `tailscale serve` if configured; else `tailscale ssh ops@cashtrack-prod-0 'docker-core exec traefik wget -qO- http://localhost:8080/api/rawdata'` shows router configs.
-- [ ] No plaintext secret in `/tmp/cashtrack-render/` on operator laptop (should have been wiped by the render task's "absent" file action).
+- [x] `tailscale ssh ops@cashtrack-prod-0 'docker-core ps'` — all core services `healthy` or `running`.
+- [x] `tailscale ssh ops@cashtrack-prod-0 'docker-core exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SHOW DATABASES"'` shows `cashtrack`, `telegram_bots`.
+- [x] `tailscale ssh ops@cashtrack-prod-0 'ls /mnt/data/'` shows `mysql/`, `prometheus/`, `loki/`, `tempo/`, `grafana/`, `alertmanager/`.
+- [x] `/opt/cashtrack/secrets/*.env` exist with mode 0600.
+- [x] Traefik dashboard reachable via `tailscale serve` if configured; else `tailscale ssh ops@cashtrack-prod-0 'docker-core exec traefik wget -qO- http://localhost:8080/api/rawdata'` shows router configs.
+- [x] No plaintext secret in `/tmp/cashtrack-render/` on operator laptop (should have been wiped by the render task's "absent" file action).
 
 ### If anything fails
 
@@ -851,7 +857,7 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
    cd infra && ansible-playbook ansible/ops/backup-restore.yml -e backup_id=<id>
    ```
    - The playbook pulls the dump from `cash-track-backups`, loads into the `cashtrack` database.
-   - The shared app user (`mysql.MYSQL_USER`) is granted post-restore (if restore drops and recreates grants, re-run mysql-init role: `make bootstrap -e ansible_tags=mysql`).
+   - If the restore drops and recreates grants (some dump tools do this), re-run the mysql-init role to reinstate all per-service users and their grants: `make bootstrap -e ansible_tags=mysql`.
 3. **Restart dependent services** to pick up restored data:
    ```bash
    tailscale ssh ops@cashtrack-prod-0 'cd /opt/cashtrack && docker compose restart api gateway'
@@ -877,7 +883,7 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
 
 ### If any fails
 
-- api 500 → `docker compose logs api` → check DB password, CAPTCHA secret, etc. A common failure: the restore dump re-created the shared app user with the old password; force the vault password by running `make bootstrap --tags mysql` after restore.
+- api 500 → `docker compose logs api` → check DB password, CAPTCHA secret, etc. A common failure: the restore dump re-created MySQL users with old passwords; re-run mysql-init to restore all per-service users and grants: `make bootstrap --tags mysql`.
 - gateway 502 upstream → `docker compose logs gateway` → API container health; check `compose.app.yml` Traefik labels spelled the service name right (`api.cashtrack-app` network name).
 - frontend 404 on `/healthcheck` → frontend image serves static assets, not a healthcheck; adjust smoke test to `GET /` and assert HTTP 200 + known body substring.
 
@@ -987,11 +993,11 @@ Tell operator: *"Stage 9 committed. The Stage 4 `{{ env "..." }}` issue is now f
    BOT_TOKEN={{ op_prefix }}/crashers-bot/BOT_TOKEN
    # ...other crashers-bot-specific keys, one line per K8s secret data key
 
-   # mysql vault — shared cashtrack app user
+   # crashers-bot-mysql vault — dedicated MySQL user, scoped to telegram_bots DB only
    DB_HOST=mysql:3306
    DB_NAME=telegram_bots
-   DB_USER={{ op_prefix }}/mysql/MYSQL_USER
-   DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
+   DB_USER={{ op_prefix }}/crashers-bot-mysql/MYSQL_USER
+   DB_PASSWORD={{ op_prefix }}/crashers-bot-mysql/MYSQL_PASSWORD
    ```
 4. **Fill `home-exporter.env.tpl`** — same shape, sourcing secrets from the `home-exporter` vault. If home-exporter doesn't touch MySQL, drop the `DB_*` block.
 5. **Render `home-exporter.config.yml` through op inject.** The K8s `home-exporter-config` ConfigMap embeds two sensitive values directly in YAML (`telegramChatId` and the ICMP probe `host`). Move them to 1Password (vault item `home-exporter`, fields `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST`) and add a `home-exporter.config.yml.tpl` template alongside the env templates. Register the file under `secret_config_files` in `group_vars/all/main.yml` and `compose-render/defaults/main.yml`; the role renders, op-injects, and ships it to `/opt/cashtrack/secrets/home-exporter/config.yml` (mode 0600). Mount that file in `compose.telegram.yml` at `/app/config/config.yml`.

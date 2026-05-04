@@ -34,8 +34,7 @@ TELEGRAM_BOT_USERNAME={{ op_prefix }}/crashers-bot/TELEGRAM_BOT_USERNAME
 TELEGRAM_BOT_WEBHOOK={{ op_prefix }}/crashers-bot/TELEGRAM_BOT_WEBHOOK
 TELEGRAM_BOT_WEBHOOK_TOKEN={{ op_prefix }}/crashers-bot/TELEGRAM_BOT_WEBHOOK_TOKEN
 
-# mysql vault — shared cashtrack app user (K8s remap: MYSQL_DATABASE → DB_DATABASE,
-# MYSQL_USER → DB_USERNAME, MYSQL_PASSWORD → DB_PASSWORD).
-DB_DATABASE=telegram_bots
-DB_USERNAME={{ op_prefix }}/mysql/MYSQL_USER
-DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
+# crashers-bot-mysql vault — dedicated MySQL user scoped to the crashers_bot database only.
+DB_DATABASE=crashers_bot
+DB_USERNAME={{ op_prefix }}/crashers-bot-mysql/MYSQL_USER
+DB_PASSWORD={{ op_prefix }}/crashers-bot-mysql/MYSQL_PASSWORD

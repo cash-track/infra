@@ -1,12 +1,16 @@
 ---
-# Idempotent: creates the shared application user (if absent) and grants ALL
-# PRIVILEGES on each database in `databases` (created if absent).
+# Idempotent: creates a dedicated MySQL user per application and grants ALL
+# PRIVILEGES on that application's database(s) only. Monitoring users (e.g.
+# mysql-exporter) are provisioned separately with read-only global grants.
+#
+# Security model: each service gets its own MySQL user scoped to its own
+# database(s). A compromised service cannot read or write any other service's data.
 #
 # Runs after compose-up has started the mysql container. We talk to mysql via
 # `docker exec` rather than over the network because the container doesn't
 # publish 3306 to the host (only the cashtrack-app docker network).
 #
-# Secrets (root password, app user/password) are resolved on the control node
+# Secrets (root password, per-user credentials) are resolved on the control node
 # via `op read` and passed into mysql exclusively through the `MYSQL_PWD`
 # environment variable — never on the command line, never written to disk.
 
@@ -25,26 +29,46 @@
   changed_when: false
   no_log: true
 
-- name: Resolve app user from 1Password
+- name: Resolve usernames from 1Password
   ansible.builtin.command:
-    cmd: "op read {{ app_user.user_op_ref }}"
+    cmd: "op read {{ item.user_op_ref }}"
   delegate_to: localhost
   become: false
   environment:
     OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
-  register: mysql_init_app_user
+  loop: "{{ app_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: mysql_init_resolved_users
   changed_when: false
   no_log: true
 
-- name: Resolve app password from 1Password
+- name: Resolve passwords from 1Password
   ansible.builtin.command:
-    cmd: "op read {{ app_user.password_op_ref }}"
+    cmd: "op read {{ item.password_op_ref }}"
   delegate_to: localhost
   become: false
   environment:
     OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
-  register: mysql_init_app_pw
+  loop: "{{ app_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: mysql_init_resolved_passwords
   changed_when: false
+  no_log: true
+
+- name: Combine credentials into user facts
+  ansible.builtin.set_fact:
+    mysql_user_credentials: >-
+      {{ mysql_user_credentials | default([]) + [{
+        'username': mysql_init_resolved_users.results[loop_index].stdout,
+        'password': mysql_init_resolved_passwords.results[loop_index].stdout,
+        'databases': item.databases
+      }] }}
+  loop: "{{ app_users }}"
+  loop_control:
+    index_var: loop_index
+    label: "{{ item.name }}"
   no_log: true
 
 - name: Wait for mysql container to report healthy
@@ -66,20 +90,66 @@
     set -euo pipefail
     docker exec -i -e MYSQL_PWD "{{ mysql_container }}" \
       mysql -uroot -N -B <<'SQL'
-    CREATE USER IF NOT EXISTS '{{ mysql_init_app_user.stdout }}'@'%' IDENTIFIED BY '{{ mysql_init_app_pw.stdout }}';
-    ALTER  USER '{{ mysql_init_app_user.stdout }}'@'%' IDENTIFIED BY '{{ mysql_init_app_pw.stdout }}';
-    {% for db in databases %}
+    {% for u in mysql_user_credentials %}
+    CREATE USER IF NOT EXISTS '{{ u.username }}'@'%' IDENTIFIED BY '{{ u.password }}';
+    ALTER  USER '{{ u.username }}'@'%' IDENTIFIED BY '{{ u.password }}';
+    {% for db in u.databases %}
     CREATE DATABASE IF NOT EXISTS `{{ db }}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-    GRANT ALL PRIVILEGES ON `{{ db }}`.* TO '{{ mysql_init_app_user.stdout }}'@'%';
+    GRANT ALL PRIVILEGES ON `{{ db }}`.* TO '{{ u.username }}'@'%';
+    {% endfor %}
     {% endfor %}
     FLUSH PRIVILEGES;
     SQL
   environment:
     MYSQL_PWD: "{{ mysql_init_root_pw.stdout }}"
-  # Idempotent SQL — `mysql -e` always exits 0 on success regardless of whether
-  # IF NOT EXISTS short-circuited. We can't cheaply distinguish "no-op" from
-  # "applied", so the task is reported unchanged on success and accepted as
-  # ok-on-rerun.
+  # Idempotent SQL — always exits 0 on success regardless of whether
+  # IF NOT EXISTS short-circuited. Reported unchanged on success; safe to re-run.
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+
+- name: Resolve monitoring user passwords from 1Password
+  ansible.builtin.command:
+    cmd: "op read {{ item.password_op_ref }}"
+  delegate_to: localhost
+  become: false
+  environment:
+    OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+  loop: "{{ monitoring_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  register: mysql_init_monitoring_passwords
+  changed_when: false
+  no_log: true
+
+- name: Combine monitoring credentials into user facts
+  ansible.builtin.set_fact:
+    mysql_monitoring_credentials: >-
+      {{ mysql_monitoring_credentials | default([]) + [{
+        'username': item.username,
+        'password': mysql_init_monitoring_passwords.results[loop_index].stdout
+      }] }}
+  loop: "{{ monitoring_users }}"
+  loop_control:
+    index_var: loop_index
+    label: "{{ item.name }}"
+  no_log: true
+
+- name: Apply monitoring user creation + global read grants via mysql client
+  ansible.builtin.shell: |
+    set -euo pipefail
+    docker exec -i -e MYSQL_PWD "{{ mysql_container }}" \
+      mysql -uroot -N -B <<'SQL'
+    {% for u in mysql_monitoring_credentials %}
+    CREATE USER IF NOT EXISTS '{{ u.username }}'@'%' IDENTIFIED BY '{{ u.password }}';
+    ALTER  USER '{{ u.username }}'@'%' IDENTIFIED BY '{{ u.password }}';
+    GRANT PROCESS, REPLICATION CLIENT, SELECT ON *.* TO '{{ u.username }}'@'%';
+    {% endfor %}
+    FLUSH PRIVILEGES;
+    SQL
+  environment:
+    MYSQL_PWD: "{{ mysql_init_root_pw.stdout }}"
   args:
     executable: /bin/bash
   changed_when: false

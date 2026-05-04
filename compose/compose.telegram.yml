@@ -46,6 +46,24 @@ services:
     mem_reservation: 256m
     oom_score_adj: -100
 
+  mysql-backup-crashers:
+    image: cashtrack/mysql-backup:${VERSION_MYSQL_BACKUP}
+    restart: unless-stopped
+    networks: [app]
+    env_file: [secrets/mysql-backup-crashers.env]
+    depends_on:
+      mysql: { condition: service_healthy }
+    command: ["tail", "-f", "/dev/null"]
+    labels:
+      - ofelia.enabled=false
+      - ofelia.job-exec.backup.schedule=0 0 * * * *
+      - ofelia.job-exec.backup.command=php app.php backup
+      - ofelia.job-exec.purge-old.schedule=0 0 4 * * 0
+      - ofelia.job-exec.purge-old.command=php app.php clear --days=7
+    mem_limit: 192m
+    mem_reservation: 128m
+    oom_score_adj: 0
+
   home-exporter:
     image: vovanms/home_exporter:${VERSION_HOME_EXPORTER}
     restart: unless-stopped

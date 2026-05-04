@@ -100,8 +100,8 @@ services:
       # `mysql_backup_last_success_timestamp_seconds` here, node-exporter scrapes it.
       - /mnt/data/node-exporter-textfile:/var/lib/node_exporter/textfile_collector
     labels:
-      - ofelia.enabled=true
-      - ofelia.job-exec.backup.schedule=0 0 3 * * *
+      - ofelia.enabled=false
+      - ofelia.job-exec.backup.schedule=0 0 * * * *
       - ofelia.job-exec.backup.command=php app.php backup
       - ofelia.job-exec.purge-old.schedule=0 0 4 * * 0
       - ofelia.job-exec.purge-old.command=php app.php clear --days=7

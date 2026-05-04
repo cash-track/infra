@@ -22,6 +22,7 @@ secret_files:
   - website
   - mysql
   - mysql-backup
+  - mysql-backup-crashers
   - mysql-exporter
   - grafana
   - crashers-bot

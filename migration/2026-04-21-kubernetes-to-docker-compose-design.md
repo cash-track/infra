@@ -71,17 +71,17 @@ Replica counts drop from 2 → 1 for api and gateway (no HA benefit on a single 
 
 ### MySQL tenant model
 
-A single MySQL server hosts multiple databases. All application services share a single app user (matches the existing K8s setup — the K8s `mysql-secret.MYSQL_USER` is consumed identically by api, crashers-bot, home-exporter today). `mysql-init` creates each database and grants `ALL PRIVILEGES` on it to the shared user.
+A single MySQL server hosts multiple databases. Each application service has its own dedicated MySQL user scoped only to its database(s). `mysql-init` creates each database and grants `ALL PRIVILEGES` on it to the corresponding dedicated user. A compromised service cannot read or write any other service's data.
 
-| Database | Used by | App user |
-|---|---|---|
-| `cashtrack` | api | `mysql.MYSQL_USER` (vault) |
-| `telegram_bots` | crashers-bot, home-exporter | `mysql.MYSQL_USER` (vault) |
-| *(future)* `wordpress` | wordpress | `mysql.MYSQL_USER` (vault) |
+| Database | Used by | App user | Vault item |
+|---|---|---|---|
+| `cashtrack` | api | `mysql.MYSQL_USER` | `mysql` |
+| `telegram_bots` | crashers-bot | `crashers-bot-mysql.MYSQL_USER` | `crashers-bot-mysql` |
+| *(future)* `wordpress` | wordpress | dedicated user | new vault item |
 
 Root credentials are used only by initial provisioning, `mysql-backup`, and `mysql-init` itself; `mysql-exporter` uses its own dedicated `exporter` MySQL user (DSN in the `mysql-exporter` vault).
 
-Trade-off: a compromised app service has read/write across every app DB. Per-app users (one per service) is a planned hardening pass after the cutover stabilizes — it requires a `mysql-app-users` vault item, a per-DB user creation step in `mysql-init`, and a re-grant after every backup restore.
+Adding a new application: add an entry to `mysql-init/vars/databases.yml` (name, vault op refs, list of databases), create the corresponding vault item in 1Password, and re-run `site.yml --tags mysql`. No shared user to rotate across services.
 
 ### Estimated monthly cost
 
@@ -769,21 +769,24 @@ Ofelia exposes Prometheus metrics (`ofelia_job_failures_total`, `ofelia_last_dur
 
 Example: a WordPress site sharing MySQL, served at `blog.cash-track.app`.
 
-1. **Add the database** — edit `ansible/roles/mysql-init/vars/databases.yml`, append to the list:
+1. **Add the database and dedicated user** — edit `ansible/roles/mysql-init/vars/databases.yml`, append an entry:
    ```yaml
-   databases:
-     - cashtrack
-     - telegram_bots
-     - wordpress
+   app_users:
+     # ...existing entries...
+     - name: wordpress
+       user_op_ref:     "op://cash-track-prod/wordpress-mysql/MYSQL_USER"
+       password_op_ref: "op://cash-track-prod/wordpress-mysql/MYSQL_PASSWORD"
+       databases:
+         - wordpress
    ```
-   `mysql-init` grants the existing shared app user (`mysql.MYSQL_USER`) on the new DB. No new MySQL user, no new vault field.
-2. **Add WP-specific secrets in 1Password** — create a new vault item `wordpress` with fields for the WP-only keys (e.g. `WORDPRESS_AUTH_KEY`, `WORDPRESS_NONCE_KEY`). DB credentials come from the existing `mysql` vault.
+   `mysql-init` creates the new user and grants `ALL PRIVILEGES` on its database only.
+2. **Add WP-specific secrets in 1Password** — create vault items `wordpress` (WP-only keys: `WORDPRESS_AUTH_KEY`, `WORDPRESS_NONCE_KEY`, etc.) and `wordpress-mysql` (`MYSQL_USER`, `MYSQL_PASSWORD` for the dedicated DB user).
 3. **Add a per-service env template** — `ansible/roles/compose-render/templates/wordpress.env.tpl`:
    ```ini
    WORDPRESS_DB_HOST=mysql
    WORDPRESS_DB_NAME=wordpress
-   WORDPRESS_DB_USER={{ op_prefix }}/mysql/MYSQL_USER
-   WORDPRESS_DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
+   WORDPRESS_DB_USER={{ op_prefix }}/wordpress-mysql/MYSQL_USER
+   WORDPRESS_DB_PASSWORD={{ op_prefix }}/wordpress-mysql/MYSQL_PASSWORD
    WORDPRESS_AUTH_KEY={{ op_prefix }}/wordpress/WORDPRESS_AUTH_KEY
    ```
 4. **Register the template** in `ansible/roles/compose-render/defaults/main.yml` under `secret_files` (renders through `op inject`).
@@ -876,7 +879,7 @@ Dedup rules:
 - `common` holds every secret consumed by 2+ services (CAPTCHA, Google OAuth, mail, S3) — one rotation point.
 - `gateway` has no vault item: only secret it needs is `CAPTCHA_SECRET_KEY`, served from `common`.
 - `mysql-backup` has no vault item: pulls `MYSQL_ROOT_PASSWORD` + `MYSQL_DATABASE` from `mysql`, `S3_KEY` + `S3_SECRET` from `common`. Bucket name is a non-secret literal.
-- No `mysql-app-users` item: a single shared app user (`cashtrack`) lives in `mysql.MYSQL_USER` / `mysql.MYSQL_PASSWORD` and is granted on every app DB by `mysql-init`. Per-app users is a future hardening step.
+- Each service gets a dedicated MySQL user scoped to its own database(s). `mysql` vault holds the api user; `crashers-bot-mysql` vault holds the crashers-bot user. Adding a new service = new `<name>-mysql` vault item + new entry in `mysql-init/vars/databases.yml`.
 - Two telegram-namespace apps (`crashers-bot`, `home-exporter`) → two separate vault items, mirroring their separate K8s secrets.
 
 ### Templates reference secrets by `op://` URI
@@ -907,7 +910,7 @@ S3_KEY={{ op_prefix }}/common/S3_KEY
 S3_SECRET={{ op_prefix }}/common/S3_SECRET
 # ... remaining GOOGLE_API_*, MAIL_*, S3_* keys
 
-# mysql vault — single shared app user
+# mysql vault — api's dedicated MySQL user, scoped to cashtrack DB only
 DB_HOST=mysql:3306
 DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
 DB_USER={{ op_prefix }}/mysql/MYSQL_USER

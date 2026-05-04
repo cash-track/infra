@@ -39,6 +39,8 @@ services:
     restart: unless-stopped
     networks: [app]
     env_file: [secrets/mysql.env]
+    ports:
+      - "127.0.0.1:3306:3306"
     volumes:
       - /mnt/data/mysql:/var/lib/mysql
     healthcheck:
@@ -54,6 +56,8 @@ services:
     image: cashtrack/redis:${VERSION_REDIS}
     restart: unless-stopped
     networks: [app]
+    ports:
+      - "127.0.0.1:6379:6379"
     # Intentionally no volume — CSRF tokens / caches are accepted-loss on restart.
     command: ["redis-server", "--maxmemory", "250mb", "--maxmemory-policy", "allkeys-lru"]
     healthcheck:

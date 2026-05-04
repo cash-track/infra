@@ -13,6 +13,8 @@ services:
     image: prom/prometheus:v2.54.1
     restart: unless-stopped
     networks: [app]
+    ports:
+      - "127.0.0.1:9090:9090"
     # node-exporter runs in `network_mode: host`, so prometheus reaches it via
     # the docker host gateway. The `host-gateway` magic mapping requires this
     # `extra_hosts` entry on Linux.
@@ -62,6 +64,8 @@ services:
     image: grafana/grafana:11.4.0
     restart: unless-stopped
     networks: [app]
+    ports:
+      - "127.0.0.1:3000:3000"
     env_file: [secrets/grafana.env]
     user: "472:472"
     # Server settings ported from the K8s grafana.ini. SMTP/admin password are
@@ -160,6 +164,8 @@ services:
     image: prom/alertmanager:v0.27.0
     restart: unless-stopped
     networks: [app]
+    ports:
+      - "127.0.0.1:9093:9093"
     # alertmanager.yml + bot_token are rendered by ansible compose-render via
     # `op inject` into ./secrets/alertmanager/ (chown'd to 65534:65534 for the
     # nobody user the container runs as). Static go templates stay in the

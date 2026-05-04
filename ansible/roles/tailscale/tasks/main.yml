@@ -1,7 +1,7 @@
 ---
 # Tailscale itself is installed and brought up by cloud-init. This role only
-# verifies the daemon is healthy and (later, when grafana is in
-# `compose_services`) publishes grafana over `tailscale serve`.
+# verifies the daemon is healthy and publishes internal services over
+# `tailscale serve` so an operator on the tailnet can reach them directly.
 - name: Read tailscale status
   ansible.builtin.command: tailscale status --json
   register: tailscale_status
@@ -19,12 +19,41 @@
       Tailscale backend is in state '{{ tailscale_backend_state }}', expected 'Running'.
       Re-run cloud-init or `tailscale up` on the droplet.
 
-# `tailscale serve` exposes grafana on the tailnet (HTTPS via tailnet cert).
-# Guarded so Stage 3 (no compose stack yet) is a no-op; flips on once Stage 4+
-# add `grafana` to `compose_services`.
+# Each `tailscale serve` call is idempotent: the `already` guard prevents failure
+# when the rule is already registered. Guards match `compose_services` so that
+# running the playbook before a stack is deployed is a no-op.
+
 - name: Publish grafana via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --https=443 http://localhost:3000
-  register: tailscale_serve
-  changed_when: tailscale_serve.rc == 0
-  failed_when: tailscale_serve.rc != 0 and 'already' not in (tailscale_serve.stderr | default(''))
+  ansible.builtin.command: tailscale serve --bg --http=8081 http://localhost:3000
+  register: tailscale_serve_grafana
+  changed_when: tailscale_serve_grafana.rc == 0
+  failed_when: tailscale_serve_grafana.rc != 0 and 'already' not in (tailscale_serve_grafana.stderr | default(''))
   when: "'grafana' in compose_services"
+
+- name: Publish prometheus via tailscale serve
+  ansible.builtin.command: tailscale serve --bg --http=9090 http://localhost:9090
+  register: tailscale_serve_prometheus
+  changed_when: tailscale_serve_prometheus.rc == 0
+  failed_when: tailscale_serve_prometheus.rc != 0 and 'already' not in (tailscale_serve_prometheus.stderr | default(''))
+  when: "'prometheus' in compose_services"
+
+- name: Publish alertmanager via tailscale serve
+  ansible.builtin.command: tailscale serve --bg --http=9093 http://localhost:9093
+  register: tailscale_serve_alertmanager
+  changed_when: tailscale_serve_alertmanager.rc == 0
+  failed_when: tailscale_serve_alertmanager.rc != 0 and 'already' not in (tailscale_serve_alertmanager.stderr | default(''))
+  when: "'alertmanager' in compose_services"
+
+- name: Publish mysql via tailscale serve
+  ansible.builtin.command: tailscale serve --bg --tcp=3306 tcp://localhost:3306
+  register: tailscale_serve_mysql
+  changed_when: tailscale_serve_mysql.rc == 0
+  failed_when: tailscale_serve_mysql.rc != 0 and 'already' not in (tailscale_serve_mysql.stderr | default(''))
+  when: "'mysql' in compose_services"
+
+- name: Publish redis via tailscale serve
+  ansible.builtin.command: tailscale serve --bg --tcp=6379 tcp://localhost:6379
+  register: tailscale_serve_redis
+  changed_when: tailscale_serve_redis.rc == 0
+  failed_when: tailscale_serve_redis.rc != 0 and 'already' not in (tailscale_serve_redis.stderr | default(''))
+  when: "'redis' in compose_services"

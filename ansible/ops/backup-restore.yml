@@ -22,16 +22,31 @@
 - name: Restore MySQL backup
   hosts: prod
   become: true
+  vars_files:
+    - ../group_vars/all/main.yml
   vars:
     bucket: "{{ backups.spaces_bucket }}"
     s3_endpoint: "https://{{ backups.spaces_endpoint }}"
     droplet_project_dir: /opt/cashtrack
+    mysql_root_password_op_ref: "op://cash-track-prod/mysql/MYSQL_ROOT_PASSWORD"
+    mysql_container: cashtrack-mysql-1
     verify_tables:
       - users
       - wallets
       - charges
       - tags
   pre_tasks:
+    - name: Resolve mysql root password from 1Password
+      ansible.builtin.command:
+        cmd: "op read {{ mysql_root_password_op_ref }}"
+      delegate_to: localhost
+      become: false
+      environment:
+        OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
+      register: backup_restore_root_pw
+      changed_when: false
+      no_log: true
+
     - name: Validate backup_id
       ansible.builtin.assert:
         that: backup_id is defined and backup_id | length > 0
@@ -96,16 +111,17 @@
     - name: Pre-restore row counts
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+        docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
           mysql -uroot --batch --skip-column-names cashtrack \
-          -e "SELECT '{{ item }}', COUNT(*) FROM `{{ item }}`;"
+          -e "SELECT '{{ item }}', COUNT(*) FROM \`{{ item }}\`;"
       args:
         chdir: "{{ droplet_project_dir }}"
       environment:
-        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
       loop: "{{ verify_tables }}"
       register: counts_before
       changed_when: false
+      ignore_errors: true
       no_log: true
 
     - name: Download backup to /tmp inside mysql-backup container
@@ -135,25 +151,25 @@
         set -euo pipefail
         docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
           gunzip -c /tmp/restore.sql.gz \
-          | docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+          | docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
               mysql -uroot
       args:
         chdir: "{{ droplet_project_dir }}"
       environment:
-        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
       changed_when: true
       no_log: true
 
     - name: Post-restore row counts
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql \
+        docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
           mysql -uroot --batch --skip-column-names cashtrack \
-          -e "SELECT '{{ item }}', COUNT(*) FROM `{{ item }}`;"
+          -e "SELECT '{{ item }}', COUNT(*) FROM \`{{ item }}\`;"
       args:
         chdir: "{{ droplet_project_dir }}"
       environment:
-        MYSQL_PWD: "{{ lookup('env', 'MYSQL_ROOT_PASSWORD') }}"
+        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
       loop: "{{ verify_tables }}"
       register: counts_after
       changed_when: false
@@ -163,5 +179,5 @@
       ansible.builtin.debug:
         msg:
           - "Restored: {{ resolved_backup }}"
-          - "Before:   {{ counts_before.results | map(attribute='stdout') | list }}"
+          - "Before:   {{ counts_before.results | map(attribute='stdout', default='(no data)') | list }}"
           - "After:    {{ counts_after.results | map(attribute='stdout') | list }}"

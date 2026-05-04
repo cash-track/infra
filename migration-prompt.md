@@ -49,6 +49,6 @@ Output end result in `./infra/migration/` directory for review.
 
 ## Pending Problems
 
-- Dedicated DB user for `crashers-bot`
+
 
 

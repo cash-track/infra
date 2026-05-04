@@ -47,6 +47,13 @@
     services: [mysql-backup]
     state: restarted
 
+- name: Restart mysql-backup-crashers
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [mysql-backup-crashers]
+    state: restarted
+
 - name: Restart mysql-exporter
   community.docker.docker_compose_v2:
     project_src: "{{ droplet_project_dir }}"

@@ -1,12 +1,26 @@
 ---
-# Single shared application user. Granted on every database in the list below.
-# Per-app users is a future hardening step (design §2 "MySQL tenant model").
-app_user:
-  user_op_ref: "op://cash-track-prod/mysql/MYSQL_USER"
-  password_op_ref: "op://cash-track-prod/mysql/MYSQL_PASSWORD"
+# Each entry defines a dedicated MySQL user scoped to its own database(s).
+# Per-service isolation: a compromised service can read/write only its own database.
+#
+# Adding a new application = append an entry with its vault item, add the database
+# name to databases, and re-run `site.yml --tags mysql`. No shared user to rotate.
+app_users:
+  - name: cashtrack
+    user_op_ref: "op://cash-track-prod/mysql/MYSQL_USER"
+    password_op_ref: "op://cash-track-prod/mysql/MYSQL_PASSWORD"
+    databases:
+      - cashtrack
+  - name: crashers-bot
+    user_op_ref: "op://cash-track-prod/crashers-bot-mysql/MYSQL_USER"
+    password_op_ref: "op://cash-track-prod/crashers-bot-mysql/MYSQL_PASSWORD"
+    databases:
+      - crashers_bot
 
-# Adding a new application = append its DB name and re-run `site.yml --tags mysql`.
-# No new vault item, no new MySQL user.
-databases:
-  - cashtrack
-  - telegram_bots
+# Monitoring users get read-only global grants (PROCESS, REPLICATION CLIENT,
+# SELECT ON *.*) instead of ALL PRIVILEGES on a specific database. Username is
+# a convention, not a secret; only the password is pulled from 1Password.
+# Operator: add MYSQL_EXPORTER_PASSWORD field to op://cash-track-prod/mysql-exporter/
+monitoring_users:
+  - name: mysql-exporter
+    username: exporter
+    password_op_ref: "op://cash-track-prod/mysql-exporter/MYSQL_EXPORTER_PASSWORD"

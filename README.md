@@ -28,7 +28,7 @@ tailscale ssh ops@cashtrack-prod-0
 Shorthand command
 
 ```bash
-./ssh-prod docker-all ps
+./ssh-prod
 ```
 
 ### Docker Compose shorthands
@@ -53,3 +53,43 @@ docker-core exec mysql mysql -u root -p$MYSQL_ROOT_PASSWORD -e "SHOW DATABASES"
 docker-obs logs -f prometheus
 docker-app restart api
 ```
+
+### Services
+
+#### MySQL Backup
+
+```shell
+./ssh-prod deploy-service mysql-backup 1.0.0    # deploy new version of docker image
+./ssh-prod docker-all logs mysql-backup         # get all container logs
+./ssh-prod docker-all restart mysql-backup      # restart backup container without redeploying
+```
+
+Commands:
+
+```bash
+./ssh-prod docker-all exec mysql-backup php app.php list            # List available backups
+./ssh-prod docker-all exec mysql-backup php app.php backup          # Backup right now
+./ssh-prod docker-all exec mysql-backup php app.php restore <id>    # restore backup by <id>
+./ssh-prod docker-all exec mysql-backup php app.php clear --days=7  # delete backups older than 7 days
+./ssh-prod docker-all exec mysql-backup bash                        # connect to bash shell inside container
+```
+
+## Troubleshooting
+
+### SSH
+
+```bash 
+./ssh-prod                     # SSH into the droplet via Tailscale.
+./ssh-prod docker-all ps       # docker compose ps inside the droplet
+./ssh-prod docker-all logs api # check logs of specific service
+```
+
+### Exposed Services via Tailscale
+
+The list of exposed services available via Tailscale.
+
+- AlertManager: [http://cashtrack-prod-0:9093](http://cashtrack-prod-0:9093)
+- Grafana: [http://cashtrack-prod-0:8081](http://cashtrack-prod-0:8081)
+- Prometheus: [http://cashtrack-prod-0:9090](http://cashtrack-prod-0:9090)
+- MySQL: `tcp://cashtrack-prod-0:3306`
+- Redis: `tcp://cashtrack-prod-0:6379`

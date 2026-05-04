@@ -76,7 +76,7 @@ S3_REGION={{ op_prefix }}/common/S3_REGION
 S3_KEY={{ op_prefix }}/common/S3_KEY
 S3_SECRET={{ op_prefix }}/common/S3_SECRET
 
-# mysql vault — single shared app user (K8s remap: MYSQL_USER → DB_USER)
+# mysql vault — api's dedicated MySQL user, scoped to cashtrack DB only (K8s remap: MYSQL_USER → DB_USER)
 DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
 DB_USER={{ op_prefix }}/mysql/MYSQL_USER
 DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD

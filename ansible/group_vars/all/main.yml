@@ -45,6 +45,7 @@ secret_files:
   - website
   - mysql
   - mysql-backup
+  - mysql-backup-crashers
   - mysql-exporter
   - grafana
   - crashers-bot
@@ -86,7 +87,7 @@ secret_config_files:
 # Service set currently expected to be running on the droplet. Stage 3 leaves this
 # empty — roles guard optional behaviour (e.g. `tailscale serve` for grafana) on
 # membership in this list.
-compose_services: []
+compose_services: [mysql, redis, prometheus, alertmanager, grafana]
 
 # Volume subdir → owner UID. Matches upstream image runtime users.
 volume_subdir_owners:
