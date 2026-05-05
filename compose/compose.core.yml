@@ -12,7 +12,7 @@ networks:
 services:
   traefik:
     image: traefik:v3.6.15
-    restart: unless-stopped
+    restart: always
     networks: [app]
     ports:
       - "80:80"
@@ -36,7 +36,7 @@ services:
 
   mysql:
     image: cashtrack/mysql:${VERSION_MYSQL}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [secrets/mysql.env]
     ports:
@@ -54,7 +54,7 @@ services:
 
   redis:
     image: cashtrack/redis:${VERSION_REDIS}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     ports:
       - "127.0.0.1:6379:6379"
@@ -71,7 +71,7 @@ services:
 
   ofelia:
     image: mcuadros/ofelia:0.3.22
-    restart: unless-stopped
+    restart: always
     networks: [app]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro

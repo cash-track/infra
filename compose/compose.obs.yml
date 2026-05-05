@@ -11,7 +11,7 @@ networks:
 services:
   prometheus:
     image: prom/prometheus:v2.54.1
-    restart: unless-stopped
+    restart: always
     networks: [app]
     ports:
       - "127.0.0.1:9090:9090"
@@ -40,7 +40,7 @@ services:
 
   node-exporter:
     image: prom/node-exporter:v1.8.2
-    restart: unless-stopped
+    restart: always
     # Host-networked: needs unmediated access to host PSI, /proc, /sys.
     network_mode: host
     pid: host
@@ -62,7 +62,7 @@ services:
 
   grafana:
     image: grafana/grafana:11.4.0
-    restart: unless-stopped
+    restart: always
     networks: [app]
     ports:
       - "127.0.0.1:3000:3000"
@@ -90,7 +90,7 @@ services:
 
   loki:
     image: grafana/loki:3.2.0
-    restart: unless-stopped
+    restart: always
     networks: [app]
     user: "10001:10001"
     volumes:
@@ -108,7 +108,7 @@ services:
 
   tempo:
     image: grafana/tempo:2.7.2
-    restart: unless-stopped
+    restart: always
     networks: [app]
     user: "10001:10001"
     volumes:
@@ -133,7 +133,7 @@ services:
   # policy at infra/services/grafana-tempo/otel-configs/collector-config.yaml.
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.116.1
-    restart: unless-stopped
+    restart: always
     network_mode: "service:tempo"
     depends_on:
       tempo: { condition: service_started }
@@ -146,7 +146,7 @@ services:
 
   promtail:
     image: grafana/promtail:3.2.0
-    restart: unless-stopped
+    restart: always
     networks: [app]
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
@@ -162,7 +162,7 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.27.0
-    restart: unless-stopped
+    restart: always
     networks: [app]
     ports:
       - "127.0.0.1:9093:9093"

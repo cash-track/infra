@@ -10,7 +10,7 @@ networks:
 services:
   api:
     image: cashtrack/api:${VERSION_API}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [.env, secrets/api.env]
     depends_on:
@@ -35,7 +35,7 @@ services:
 
   gateway:
     image: cashtrack/gateway:${VERSION_GATEWAY}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [.env, secrets/gateway.env]
     depends_on:
@@ -54,7 +54,7 @@ services:
 
   frontend:
     image: cashtrack/frontend:${VERSION_FRONTEND}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     # The image's entrypoint substitutes VUE_APP_* into the served bundle /
     # nginx config at start (matches infra/services/frontend/deployment.yml).
@@ -72,7 +72,7 @@ services:
 
   website:
     image: cashtrack/website:${VERSION_WEBSITE}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [.env, secrets/website.env]
     labels:
@@ -88,7 +88,7 @@ services:
 
   mysql-backup:
     image: cashtrack/mysql-backup:${VERSION_MYSQL_BACKUP}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [secrets/mysql-backup.env]
     depends_on:
@@ -111,7 +111,7 @@ services:
 
   mysql-exporter:
     image: prom/mysqld-exporter:v0.14.0
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [secrets/mysql-exporter.env]
     depends_on:

@@ -30,3 +30,15 @@
     name: docker
     enabled: true
     state: started
+
+- name: Prevent needrestart from auto-restarting Docker and containerd on package upgrades
+  ansible.builtin.copy:
+    dest: /etc/needrestart/conf.d/99-docker.conf
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # unattended-upgrades uses needrestart to restart services after package
+      # upgrades. Restarting containerd stops Docker, which kills all containers.
+      # Override: never auto-restart Docker or containerd — bring them up manually.
+      $nrconf{override_rc}{qr/^(docker|containerd)\.service$/} = 0;

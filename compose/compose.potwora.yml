@@ -22,7 +22,7 @@ networks:
 services:
   potwora:
     image: serversideup/php:8.1-fpm-apache
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [secrets/potwora.env]
     depends_on:
@@ -44,7 +44,7 @@ services:
 
   potwora-backup:
     image: vovanms/wordpress-backup:${VERSION_POTWORA_BACKUP}
-    restart: unless-stopped
+    restart: always
     networks: [app]
     env_file: [secrets/potwora-backup.env]
     depends_on:
