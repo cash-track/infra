@@ -1,5 +1,3 @@
-name: cashtrack
-
 # Telegram-namespace apps. crashers-bot is a Laravel HTTP bot (Telegram webhook
 # receiver + scheduler); home-exporter is a Prometheus-style exporter that
 # ICMP-pings remote hosts and reports state to Telegram. Both source repos live
@@ -55,11 +53,11 @@ services:
       mysql: { condition: service_healthy }
     command: ["tail", "-f", "/dev/null"]
     labels:
-      - ofelia.enabled=false
-      - ofelia.job-exec.backup.schedule=0 0 * * * *
-      - ofelia.job-exec.backup.command=php app.php backup
-      - ofelia.job-exec.purge-old.schedule=0 0 4 * * 0
-      - ofelia.job-exec.purge-old.command=php app.php clear --days=7
+      - ofelia.enabled=true
+      - ofelia.job-exec.backup-crashers.schedule=0 0 * * * *
+      - ofelia.job-exec.backup-crashers.command=php app.php backup
+      - ofelia.job-exec.purge-old-crashers.schedule=0 0 4 * * 0
+      - ofelia.job-exec.purge-old-crashers.command=php app.php clear --days=7
     mem_limit: 192m
     mem_reservation: 128m
     oom_score_adj: 0

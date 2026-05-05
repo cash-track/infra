@@ -1,42 +1,36 @@
 ---
-# Restore a MySQL dump from cash-track-backups into the running mysql
-# container. Parameterized by `backup_id` (object key under the bucket) or the
-# literal "latest" — in which case the playbook resolves the newest object via
-# `aws s3 ls`.
+# Restore a MySQL dump from the `crashers-bot-backups` Spaces bucket into the
+# running mysql container (crashers_bot database).
+# Parameterized by `backup_id` (object key at the bucket root) or the
+# literal "latest" — in which case the playbook resolves the newest object.
 #
-# Destructive by design (rewrites tables). No `--check` mode wrapper because
-# restore is fundamentally a write — guard with explicit operator confirmation
-# before invoking. A row-count snapshot of the largest mutable tables is
-# captured before AND after the restore so the operator can confirm the
-# restore did what they expected.
+# Destructive by design (rewrites tables). Guard with explicit operator
+# confirmation. Row-count snapshots are captured before AND after the restore.
 #
 # Usage:
-#   ansible-playbook ops/backup-restore.yml -e backup_id=cashtrack-2026-04-25.sql.gz
-#   ansible-playbook ops/backup-restore.yml -e backup_id=latest
-#   ansible-playbook ops/backup-restore.yml -e backup_id=latest -e verify_only=true
+#   ansible-playbook ops/backup-restore-crashers.yml -e backup_id=cashtrack-2026-04-25.sql.gz
+#   ansible-playbook ops/backup-restore-crashers.yml -e backup_id=latest
+#   ansible-playbook ops/backup-restore-crashers.yml -e backup_id=latest -e verify_only=true
 #
 # `verify_only=true` resolves the latest object, prints its key + age, and
-# exits without touching MySQL. Wired up to `make backup-verify` for
-# day-to-day "is the backup chain still alive?" checks.
+# exits without touching MySQL.
 
-- name: Restore MySQL backup
+- name: Restore crashers_bot MySQL backup
   hosts: prod
   become: true
   vars_files:
     - ../group_vars/all/main.yml
   vars:
-    bucket: "{{ backups.spaces_bucket }}"
+    bucket: "crashers-bot-backups"
     s3_endpoint: "https://{{ backups.spaces_endpoint }}"
     droplet_project_dir: /opt/cashtrack
     mysql_root_password_op_ref: "op://cash-track-prod/mysql/MYSQL_ROOT_PASSWORD"
     mysql_container: cashtrack-mysql-1
     verify_tables:
       - users
-      - wallets
-      - charges
-      - tags
-      - limits
-      - passkeys
+      - chats
+      - chats_users
+      - pidar_history_logs
       - migrations
   pre_tasks:
     - name: Resolve mysql root password from 1Password
@@ -46,7 +40,7 @@
       become: false
       environment:
         OP_SERVICE_ACCOUNT_TOKEN: "{{ lookup('env', 'OP_SERVICE_ACCOUNT_TOKEN') }}"
-      register: backup_restore_root_pw
+      register: crashers_restore_root_pw
       changed_when: false
       no_log: true
 
@@ -59,9 +53,9 @@
       ansible.builtin.pause:
         prompt: |
           About to restore '{{ backup_id }}' from s3://{{ bucket }}/ over
-          the live MySQL on {{ inventory_hostname }}. This OVERWRITES tables.
+          the crashers_bot database on {{ inventory_hostname }}. This OVERWRITES tables.
           Type 'restore' to continue, anything else to abort.
-      register: restore_confirm
+      register: crashers_restore_confirm
       when: not (verify_only | default(false) | bool)
 
     - name: Abort if not confirmed
@@ -69,35 +63,35 @@
         msg: "Operator did not confirm — aborting."
       when:
         - not (verify_only | default(false) | bool)
-        - restore_confirm.user_input | default('') != 'restore'
+        - crashers_restore_confirm.user_input | default('') != 'restore'
   tasks:
     - name: Resolve `latest` to a concrete object key
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+        docker compose -f compose.core.yml -f compose.telegram.yml exec -T mysql-backup-crashers \
           aws --endpoint-url={{ s3_endpoint }} s3 ls "s3://{{ bucket }}/" \
           | awk '{print $4}' | sort | tail -n1
       args:
         chdir: "{{ droplet_project_dir }}"
         executable: /bin/bash
-      register: latest_key_lookup
+      register: crashers_latest_key_lookup
       changed_when: false
       when: backup_id == 'latest'
 
     - name: Pin resolved backup key
       ansible.builtin.set_fact:
         resolved_backup: >-
-          {{ latest_key_lookup.stdout if backup_id == 'latest' else backup_id }}
+          {{ crashers_latest_key_lookup.stdout if backup_id == 'latest' else backup_id }}
 
     - name: Read backup object metadata for verify_only mode
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+        docker compose -f compose.core.yml -f compose.telegram.yml exec -T mysql-backup-crashers \
           aws --endpoint-url={{ s3_endpoint }} s3 ls "s3://{{ bucket }}/{{ resolved_backup }}"
       args:
         chdir: "{{ droplet_project_dir }}"
         executable: /bin/bash
-      register: verify_listing
+      register: crashers_verify_listing
       changed_when: false
       when: verify_only | default(false) | bool
 
@@ -106,7 +100,7 @@
         msg:
           - "verify_only=true — skipping restore."
           - "resolved key: {{ resolved_backup }}"
-          - "object listing: {{ verify_listing.stdout | default('(unknown)') }}"
+          - "object listing: {{ crashers_verify_listing.stdout | default('(unknown)') }}"
       when: verify_only | default(false) | bool
 
     - name: End play in verify_only mode
@@ -116,21 +110,21 @@
     - name: Pre-restore row counts
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
-          mysql -uroot --batch --skip-column-names cashtrack \
+        docker compose -f compose.core.yml -f compose.telegram.yml exec -T -e MYSQL_PWD mysql \
+          mysql -uroot --batch --skip-column-names crashers_bot \
           -e "SELECT '{{ item }}', COUNT(*) FROM \`{{ item }}\`;"
       args:
         chdir: "{{ droplet_project_dir }}"
         executable: /bin/bash
       environment:
-        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
+        MYSQL_PWD: "{{ crashers_restore_root_pw.stdout }}"
       loop: "{{ verify_tables }}"
-      register: counts_before
+      register: crashers_counts_before
       changed_when: false
       ignore_errors: true
       no_log: true
 
-    - name: Download backup to /tmp inside mysql-backup container
+    - name: Download backup to /tmp inside mysql-backup-crashers container
       ansible.builtin.command:
         argv:
           - docker
@@ -138,10 +132,10 @@
           - -f
           - compose.core.yml
           - -f
-          - compose.app.yml
+          - compose.telegram.yml
           - exec
           - -T
-          - mysql-backup
+          - mysql-backup-crashers
           - aws
           - "--endpoint-url={{ s3_endpoint }}"
           - s3
@@ -155,31 +149,31 @@
     - name: Apply restore (gunzip → mysql, root password from env)
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T mysql-backup \
+        docker compose -f compose.core.yml -f compose.telegram.yml exec -T mysql-backup-crashers \
           gunzip -c /tmp/restore.sql.gz \
-          | docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
-              mysql -uroot cashtrack
+          | docker compose -f compose.core.yml -f compose.telegram.yml exec -T -e MYSQL_PWD mysql \
+              mysql -uroot crashers_bot
       args:
         chdir: "{{ droplet_project_dir }}"
         executable: /bin/bash
       environment:
-        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
+        MYSQL_PWD: "{{ crashers_restore_root_pw.stdout }}"
       changed_when: true
       no_log: true
 
     - name: Post-restore row counts
       ansible.builtin.shell: |
         set -euo pipefail
-        docker compose -f compose.core.yml -f compose.app.yml exec -T -e MYSQL_PWD mysql \
-          mysql -uroot --batch --skip-column-names cashtrack \
+        docker compose -f compose.core.yml -f compose.telegram.yml exec -T -e MYSQL_PWD mysql \
+          mysql -uroot --batch --skip-column-names crashers_bot \
           -e "SELECT '{{ item }}', COUNT(*) FROM \`{{ item }}\`;"
       args:
         chdir: "{{ droplet_project_dir }}"
         executable: /bin/bash
       environment:
-        MYSQL_PWD: "{{ backup_restore_root_pw.stdout }}"
+        MYSQL_PWD: "{{ crashers_restore_root_pw.stdout }}"
       loop: "{{ verify_tables }}"
-      register: counts_after
+      register: crashers_counts_after
       changed_when: false
       no_log: true
 
@@ -187,5 +181,5 @@
       ansible.builtin.debug:
         msg:
           - "Restored: {{ resolved_backup }}"
-          - "Before:   {{ counts_before.results | map(attribute='stdout', default='(no data)') | list }}"
-          - "After:    {{ counts_after.results | map(attribute='stdout') | list }}"
+          - "Before:   {{ crashers_counts_before.results | map(attribute='stdout', default='(no data)') | list }}"
+          - "After:    {{ crashers_counts_after.results | map(attribute='stdout') | list }}"

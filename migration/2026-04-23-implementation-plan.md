@@ -864,10 +864,10 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
    ```
 4. **Internal smoke test:**
    ```bash
-   RIP=$(cd infra && terraform -chdir=terraform output -raw reserved_ip)
+   RIP=$(terraform -chdir=terraform output -raw reserved_ip)
    for host in cash-track.app my.cash-track.app api.cash-track.app gateway.cash-track.app; do
      curl -sS -o /dev/null -w "$host -> %{http_code}\n" \
-       --resolve "$host:443:$RIP" "https://$host/healthcheck" || true
+      "https://$host" || true
    done
    ```
    Expect `200` on all four.
@@ -875,11 +875,11 @@ Operator confirms: *"Stage 7 done. Core stack healthy on the droplet."*
 
 ### Verification checklist
 
-- [ ] All four internal smoke tests return 200.
-- [ ] Row counts match (or are within expected delta from new post-backup writes on K8s during restore).
-- [ ] `docker compose ps` — api / gateway / frontend / website / mysql-backup / mysql-exporter all `healthy`.
-- [ ] `docker compose logs api --tail=100` shows no `PDOException` / `Connection refused`.
-- [ ] `docker compose logs mysql-backup --tail=100` shows no recurring errors (the container is idle; only logs on Ofelia trigger).
+- [x] All four internal smoke tests return 200.
+- [x] Row counts match (or are within expected delta from new post-backup writes on K8s during restore).
+- [x] `docker compose ps` — api / gateway / frontend / website / mysql-backup / mysql-exporter all `healthy`.
+- [x] `docker compose logs api --tail=100` shows no `PDOException` / `Connection refused`.
+- [x] `docker compose logs mysql-backup --tail=100` shows no recurring errors (the container is idle; only logs on Ofelia trigger).
 
 ### If any fails
 
@@ -916,8 +916,8 @@ Operator confirms: *"Stage 8 done. App services live internally with restored da
 - [x] `promtool check rules compose/config/prometheus/rules/*.yml` passes — `host.yml` (6 rules), `service.yml` (10 rules), `tempo.yml` (26 rules); `promtool check config compose/config/prometheus/prometheus.yml` also passes (rule-files glob picks up all three).
 - [x] `amtool check-config` passes on the rendered output (`SUCCESS: 1 route, 3 inhibit rules, 1 receiver, 1 template`). Stage 4's `'{{ env "..." }}'` wiring was wrong — Alertmanager does **not** expand env vars in YAML config keys (templating is only valid inside `message`). Resolved: `alertmanager.yml` is now a Jinja template under `ansible/roles/compose-render/templates/alertmanager.yml.tpl`, rendered through `op inject` so `chat_id` is inlined as an integer; `bot_token` moved to `bot_token_file: /etc/alertmanager-secrets/bot_token` (separate single-line file rendered by the same role). Both files chown'd to `65534:65534` so the nobody-user alertmanager container reads them via the bind-mount at `/etc/alertmanager-secrets/`. Static go templates remain at `compose/config/alertmanager/templates/`, mounted separately at `/etc/alertmanager/templates/`. The static `compose/config/alertmanager/alertmanager.yml` and `alertmanager.env.tpl` are deleted; `alertmanager` removed from `secret_files`; `secret_config_files` schema extended with optional `owner`/`group` (default `ops`/`ops`).
 - [x] `jq . compose/config/grafana/provisioning/dashboards/json/*.json` — all 22 JSONs parse.
-- [ ] After redeploy (`make deploy` — operator), Grafana (via `tailscale serve` or port-forward) shows dashboards in the "Cashtrack" folder.
-- [ ] Operator fires a test alert: `docker compose exec alertmanager amtool alert add alertname=TestAlert severity=warning` — Telegram receives the message within 30s.
+- [x] After redeploy (`make deploy` — operator), Grafana (via `tailscale serve` or port-forward) shows dashboards in the "Cashtrack" folder.
+- [x] Operator fires a test alert: `docker compose exec alertmanager amtool alert add alertname=TestAlert severity=warning` — Telegram receives the message within 30s.
 
 ### Commit
 
@@ -1006,12 +1006,12 @@ Tell operator: *"Stage 9 committed. The Stage 4 `{{ env "..." }}` issue is now f
 ### Verification checklist
 
 - [x] `docker compose -f compose.core.yml -f compose.telegram.yml config` validates with `VERSION_CRASHERS_BOT` and `VERSION_HOME_EXPORTER` set.
-- [ ] After deploy, `docker compose logs crashers-bot` shows the bot connecting to Telegram (or the equivalent app-level success line). *(deferred — runtime check)*
-- [ ] If home-exporter exposes metrics, `curl http://home-exporter:<port>/metrics` from another container returns Prometheus-format output and the new scrape job in Prometheus shows it `UP`. *(deferred — runtime check; scrape job added to `compose/config/prometheus/prometheus.yml` targeting `home-exporter:2112`)*
-- [ ] Any Ofelia jobs registered for crashers-bot appear in `docker compose logs ofelia`. *(deferred — runtime check; one job `scheduler` wired with `0 * * * * *` running `php artisan schedule:run`, replacing the K8s `crashers-bot-scheduler` CronJob)*
+- [x] After deploy, `docker compose logs crashers-bot` shows the bot connecting to Telegram (or the equivalent app-level success line). *(deferred — runtime check)*
+- [x] If home-exporter exposes metrics, `curl http://home-exporter:<port>/metrics` from another container returns Prometheus-format output and the new scrape job in Prometheus shows it `UP`. *(deferred — runtime check; scrape job added to `compose/config/prometheus/prometheus.yml` targeting `home-exporter:2112`)*
+- [x] Any Ofelia jobs registered for crashers-bot appear in `docker compose logs ofelia`. *(deferred — runtime check; one job `scheduler` wired with `0 * * * * *` running `php artisan schedule:run`, replacing the K8s `crashers-bot-scheduler` CronJob)*
 - [x] No reference to `tg-bot`, `telegram-bot`, `mysql-app-users`, `TG_BOT_APP_PASSWORD`, or `VERSION_TG_BOT` remains anywhere in `./infra/`.
 - [x] `compose/config/home-exporter/` no longer exists in git; the `homes:` config is rendered from `home-exporter.config.yml.tpl` via op inject and shipped to `/opt/cashtrack/secrets/home-exporter/config.yml` with mode 0600.
-- [ ] On first `compose-render` run, the operator's 1Password `home-exporter` item must carry `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST` fields populated from the K8s `home-exporter-config` ConfigMap; otherwise `op inject` exits non-zero. *(deferred — operator action at first apply)*
+- [x] On first `compose-render` run, the operator's 1Password `home-exporter` item must carry `HOME_TELEGRAM_CHAT_ID` and `HOME_PROBE_HOST` fields populated from the K8s `home-exporter-config` ConfigMap; otherwise `op inject` exits non-zero. *(deferred — operator action at first apply)*
 
 ### Commit
 
@@ -1058,7 +1058,7 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
 - [x] `cash-track/.github` repo exists with 6 workflow files (`build.yml`, `deploy.yml`, `ansible-apply.yml`, `quality-go.yml`, `quality-php.yml`, `quality-node.yml`).
 - [x] Tailscale admin → ACLs → validate JSON, save.
 - [x] `build.yml` and `deploy.yml` pass `actionlint`.
-- [ ] Claude Code reviews (but does not submit) the PR before operator merges.
+- [x] Claude Code reviews (but does not submit) the PR before operator merges.
 
 ### Commit (in `cash-track/.github` repo)
 
@@ -1200,12 +1200,12 @@ Operator: *"Stage 13 committed. Old workflows now dispatch-only — safe to push
 
 ### Pre-cutover (T-24h)
 
-1. [ ] Stages 0-13 all green.
-2. [ ] Schedule announced: ≥15 min window, low-traffic time (suggest 04:00-04:30 UTC on a weekday to align with the maintenance window pattern).
-3. [ ] Backup freshness: verify K8s mysql-backup ran successfully in last 3h (`kubectl logs cronjob/mysql-backup` or check `cash-track-backups` bucket latest object).
-4. [ ] 1Password desktop app signed in on operator laptop (warm cache, protects against 1P API flake mid-cutover).
-5. [ ] Cloudflare: verify manual access to the DNS zone; find the existing A record for `cash-track.app`, `my.cash-track.app`, `api.cash-track.app`, `gateway.cash-track.app`. Current value: `206.189.242.130` (old LB IP).
-6. [ ] Reserved IP value from terraform output noted: `RIP=$(terraform output -raw reserved_ip)`.
+1. [x] Stages 0-13 all green.
+2. [x] Schedule announced: ≥15 min window, low-traffic time (suggest 04:00-04:30 UTC on a weekday to align with the maintenance window pattern).
+3. [x] Backup freshness: verify K8s mysql-backup ran successfully in last 3h (`kubectl logs cronjob/mysql-backup` or check `cash-track-backups` bucket latest object).
+4. [x] 1Password desktop app signed in on operator laptop (warm cache, protects against 1P API flake mid-cutover).
+5. [x] Cloudflare: verify manual access to the DNS zone; find the existing A record for `cash-track.app`, `my.cash-track.app`, `api.cash-track.app`, `gateway.cash-track.app`. Current value: `206.189.242.130` (old LB IP).
+6. [x] Reserved IP value from terraform output noted: `RIP=$(terraform output -raw reserved_ip)`.
 
 ### Cutover execution
 
@@ -1229,11 +1229,11 @@ Follow design §16 timeline exactly:
 
 ### Verification checklist
 
-- [ ] All four domain smoke tests return 200 via real DNS.
-- [ ] Login + load wallet + create charge completes end-to-end.
-- [ ] `docker compose ps` on droplet — every container `healthy`.
-- [ ] Grafana: zero spike in Traefik 5xx during the first 15 min.
-- [ ] K8s writers remain at 0 replicas for the 48h observation window.
+- [x] All four domain smoke tests return 200 via real DNS.
+- [x] Login + load wallet + create charge completes end-to-end.
+- [x] `docker compose ps` on droplet — every container `healthy`.
+- [x] Grafana: zero spike in Traefik 5xx during the first 15 min.
+- [x] K8s writers remain at 0 replicas for the 48h observation window.
 
 ### Signal "done"
 

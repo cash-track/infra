@@ -1,5 +1,3 @@
-name: cashtrack
-
 # WordPress site for potwora.com.ua. Files live on the Block Volume under
 # /mnt/data/potwora (mounted as /var/www/html inside the container — same
 # layout as the K8s PVC). DB is the shared mysql instance with an isolated

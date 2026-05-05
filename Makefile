@@ -7,7 +7,7 @@
 TF = terraform -chdir=terraform
 AP = cd ansible && ansible-playbook
 
-.PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify firewall-refresh traefik-cf-refresh restore-to-new-volume
+.PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify backup-verify-crashers firewall-refresh traefik-cf-refresh restore-to-new-volume
 
 plan:
 	$(TF) plan
@@ -50,6 +50,9 @@ ssh-close:
 
 backup-verify:
 	$(AP) ops/backup-restore.yml -e backup_id=latest -e verify_only=true
+
+backup-verify-crashers:
+	$(AP) ops/backup-restore-crashers.yml -e backup_id=latest -e verify_only=true
 
 firewall-refresh:
 	$(AP) ops/firewall-refresh-cf.yml

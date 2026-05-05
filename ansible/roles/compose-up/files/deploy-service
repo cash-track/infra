@@ -35,7 +35,7 @@ VAR_NAME="${VAR_NAME//-/_}"
 tmp=$(mktemp)
 awk -v k="$VAR_NAME" -v v="$TAG" 'BEGIN{FS=OFS="="} $1==k{$2=v} 1' .env > "$tmp" && mv "$tmp" .env
 
-COMPOSE="docker compose -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml"
+COMPOSE="docker compose --project-name cashtrack -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml"
 
 $COMPOSE pull "$SERVICE"
 

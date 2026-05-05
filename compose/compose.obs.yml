@@ -1,5 +1,3 @@
-name: cashtrack
-
 # Observability stack. node-exporter is host-networked; everything else lives on
 # the shared cashtrack-app bridge so Prometheus can resolve targets by name.
 

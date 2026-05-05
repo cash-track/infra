@@ -1,6 +1,15 @@
 #!/usr/bin/env bash
 set -euo pipefail
-exec docker compose \
-  -f /opt/cashtrack/compose.core.yml \
-  -f /opt/cashtrack/compose.potwora.yml \
-  "$@"
+if [[ "${1:-}" == "ps" ]]; then
+  exec docker compose \
+    --project-name cashtrack \
+    -f /opt/cashtrack/compose.core.yml \
+    -f /opt/cashtrack/compose.potwora.yml \
+    ps --orphans=false "${@:2}"
+else
+  exec docker compose \
+    --project-name cashtrack \
+    -f /opt/cashtrack/compose.core.yml \
+    -f /opt/cashtrack/compose.potwora.yml \
+    "$@"
+fi
