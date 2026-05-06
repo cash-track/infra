@@ -26,13 +26,19 @@
   loop: "{{ compose_files }}"
 
 - name: Upload per-service config tree
-  ansible.builtin.copy:
+  ansible.posix.synchronize:
     src: "{{ compose_source_dir }}/config/"
     dest: "{{ droplet_config_dir }}/"
+    delete: true
+    recursive: true
+
+- name: Fix config tree ownership
+  ansible.builtin.file:
+    path: "{{ droplet_config_dir }}"
+    state: directory
     owner: ops
     group: ops
-    mode: "0644"
-    directory_mode: "0755"
+    recurse: true
 
 - name: Install deploy-service script
   ansible.builtin.copy:
