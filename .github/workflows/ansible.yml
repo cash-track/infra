@@ -1,0 +1,19 @@
+name: ansible
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'ansible/**'
+      - 'compose/**'
+      - 'terraform/**'
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    environment: prod
+    uses: cash-track/.github/.github/workflows/ansible.yml@main
+    secrets: inherit

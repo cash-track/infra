@@ -1,6 +1,6 @@
 # Cash-Track Infrastructure
 
-Single-droplet Docker Compose deployment on DigitalOcean (`ams3`), provisioned by Terraform and configured by Ansible. Persistent state lives on an attached Block Volume; a Reserved IP fronts Cloudflare DNS so the droplet is replaceable without DNS changes.
+Single-droplet Docker Compose deployment on DigitalOcean, provisioned by Terraform and configured by Ansible. Persistent state lives on an attached Block Volume; a Reserved IP fronts Cloudflare DNS.
 
 ## Layout
 
@@ -11,13 +11,59 @@ compose/     compose.{core,app,obs,telegram}.yml + service config
 scripts/     bootstrap-buckets.sh, restore-to-new-volume.sh, replace-preflight.sh
 ```
 
-The previous Kubernetes documentation is preserved in `README-kubernetes.md`; the K8s manifests under `common/` and `services/` remain dormant until decommission.
+## Commands
+
+| Command | What it does |
+|---|---|
+| `make plan` | `terraform plan` — preview infra changes |
+| `make apply` | `terraform apply` — apply infra changes |
+| `make bootstrap` | Full `ansible-playbook site.yml` — provision or re-provision the droplet |
+| `make deploy` | `ansible-playbook site.yml --tags compose` — re-render and restart Compose services only |
+| `make replace` | Preflight check → replace droplet → re-bootstrap (operator action) |
+| `make wait-tailnet` | Poll until the droplet joins Tailscale (used after `make apply`) |
+| `make ssh-open` | Open firewall SSH for your current public IP |
+| `make ssh-close` | Close firewall SSH for your current public IP |
+| `make firewall-refresh` | Sync Cloudflare IP ranges into the DO firewall |
+| `make traefik-cf-refresh` | Refresh Cloudflare IPs in the Traefik trusted-proxy list |
+| `make backup-verify` | Restore latest backup into a scratch DB and verify integrity |
+| `make restore-to-new-volume` | Restore a backup onto a new block volume (disaster recovery) |
+
+## What changed → what to run
+
+| Modified path | Command                     |
+|---|-----------------------------|
+| `terraform/` | `make plan` -> `make apply` |
+| `compose/*.yml` | `make deploy`               |
+| `compose/config/` | `make deploy`               |
+| `ansible/roles/compose-render/` | `make deploy`               |
+| `ansible/roles/compose-up/` | `make deploy`               |
+| `ansible/roles/{base,docker,tailscale,volume,mysql-init}/` | `make bootstrap`            |
+
+`make deploy` = `ansible-playbook site.yml --tags compose` — re-renders and restarts Compose services only, no system-level changes.
+
+`make bootstrap` = full `ansible-playbook site.yml` — re-applies every role; safe to re-run but touches system packages, users, and mounts.
+
+### `.env` and version pins
+
+`/opt/cashtrack/.env` is a symlink to `/mnt/data/cashtrack.env` on the block volume. It survives droplet replacement; Ansible only seeds it on a fresh volume (`force: false`). After that, `deploy-service` is the sole writer — it updates individual `VERSION_*` lines in place on every CI deploy.
+
+Consequence: if you add a new `VERSION_*` variable to `ansible/roles/compose-render/templates/env.tpl`, you must add it to the live `.env` manually after `make deploy`:
+
+```bash
+./ssh-prod                                          # SSH into the droplet
+echo "VERSION_NEWSERVICE=1.0.0" >> /mnt/data/cashtrack.env
+```
+
+Or wipe and re-seed (all version pins reset to `group_vars` values, then CI redeploys restore live tags):
+
+```bash
+./ssh-prod rm /mnt/data/cashtrack.env
+make deploy
+```
 
 ## Day-to-day
 
 Working machine must be connected to Tailscale before calling any operational commands.
-
-`make plan`, `make apply`, `make deploy` — full operational reference is filled in once the cutover is complete.
 
 ### Droplet shell
 
@@ -25,15 +71,11 @@ SSH via Tailscale as the `ops` user. The shell drops into `/opt/cashtrack` autom
 
 ```bash
 tailscale ssh ops@cashtrack-prod-0
-```
-
-Shorthand command
-
-```bash
+# or just
 ./ssh-prod
 ```
 
-### Docker Compose shorthands
+### Docker Compose
 
 Five wrapper scripts are installed to `/usr/local/bin/` on the droplet. Each accepts the same arguments as `docker compose`.
 
@@ -46,7 +88,6 @@ Five wrapper scripts are installed to `/usr/local/bin/` on the droplet. Each acc
 | `docker-potwora` | `compose.core.yml` + `compose.potwora.yml` |
 | `docker-all` | all five |
 
-`docker-app`, `docker-telegram`, and `docker-potwora` include `compose.core.yml` because their services declare `depends_on: mysql/redis`. `docker-obs` is self-contained.
 
 Examples:
 

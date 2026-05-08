@@ -1,0 +1,22 @@
+name: replace droplet
+
+on:
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Reason for replacement — forwarded as FORCE_REPLACE_REASON to bypass stale-backup guard'
+        type: string
+        required: false
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  replace:
+    environment: prod
+    uses: cash-track/.github/.github/workflows/ansible.yml@main
+    with:
+      playbook: replace-droplet.yml
+      force_replace_reason: ${{ inputs.reason }}
+    secrets: inherit

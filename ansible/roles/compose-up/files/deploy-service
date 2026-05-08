@@ -1,16 +1,17 @@
 #!/usr/bin/env bash
-# Invoked over Tailscale SSH by the cash-track/.github `ship-service.yml`
+# Invoked over Tailscale SSH by the cash-track/.github `deploy.yml`
 # reusable workflow under `sudo -n` as the unprivileged `deploy` user.
-# Three positional arguments:
-#   $1 SERVICE        compose service name (api, gateway, frontend, ...)
-#   $2 TAG            image tag, used verbatim
-#   $3 MIGRATE        "true" to run `php app.php migrate` for the api service
+# Positional arguments:
+#   $1 SERVICE            compose service name (api, gateway, frontend, ...)
+#   $2 TAG                image tag, used verbatim
+#   $3 POST_CMDS_B64      base64-encoded newline-separated commands to run
+#                         inside the container before `up -d` (may be empty)
 set -euo pipefail
 cd /opt/cashtrack
 
 SERVICE="${1:-}"
 TAG="${2:-}"
-MIGRATE="${3:-false}"
+POST_CMDS_B64="${3:-}"
 
 # Allowlist: any change here requires a privileged operator to update the
 # script on the droplet. Keep in sync with compose service names.
@@ -25,22 +26,32 @@ if [[ ! "$TAG" =~ ^[A-Za-z0-9._-]{1,64}$ ]]; then
   echo "deploy-service: invalid tag '$TAG'" >&2; exit 2
 fi
 
-if [[ "$MIGRATE" != "true" && "$MIGRATE" != "false" ]]; then
-  echo "deploy-service: invalid migrate flag '$MIGRATE'" >&2; exit 2
-fi
-
 VAR_NAME="VERSION_${SERVICE^^}"
 VAR_NAME="${VAR_NAME//-/_}"
 
+# Resolve the real path before rewriting so the awk+mv does not replace the
+# /opt/cashtrack/.env symlink (which points to /mnt/data/cashtrack.env) with
+# a plain file, losing the volume-backed state across droplet replacements.
+DOTENV=$(readlink -f .env)
 tmp=$(mktemp)
-awk -v k="$VAR_NAME" -v v="$TAG" 'BEGIN{FS=OFS="="} $1==k{$2=v} 1' .env > "$tmp" && mv "$tmp" .env
+awk -v k="$VAR_NAME" -v v="$TAG" 'BEGIN{FS=OFS="="} $1==k{$2=v} 1' "$DOTENV" > "$tmp" && mv "$tmp" "$DOTENV"
 
 COMPOSE="docker compose --project-name cashtrack -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml"
 
 $COMPOSE pull "$SERVICE"
 
-if [[ "$MIGRATE" == "true" && "$SERVICE" == "api" ]]; then
-  $COMPOSE run --rm api php app.php migrate -s -n
+if [[ -n "$POST_CMDS_B64" ]]; then
+  # Decode and run each non-empty line inside the container.
+  # Each command is validated: only alphanumerics, spaces, and safe punctuation
+  # (.  /  :  -  _) are allowed — shell operators are rejected.
+  while IFS= read -r cmd; do
+    [[ -z "$cmd" ]] && continue
+    if [[ ! "$cmd" =~ ^[A-Za-z0-9\ ./:\-_]{1,200}$ ]]; then
+      echo "deploy-service: refusing unsafe command: $cmd" >&2; exit 2
+    fi
+    # shellcheck disable=SC2086
+    $COMPOSE run --rm "$SERVICE" $cmd
+  done < <(printf '%s' "$POST_CMDS_B64" | base64 -d)
 fi
 
 $COMPOSE up -d --no-deps "$SERVICE"

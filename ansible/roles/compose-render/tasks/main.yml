@@ -21,6 +21,12 @@
     - "{{ droplet_project_dir }}"
     - "{{ droplet_secrets_dir }}"
 
+- name: Symlink top-level .env to block volume so it survives droplet replacement
+  ansible.builtin.file:
+    src: /mnt/data/cashtrack.env
+    dest: "{{ droplet_project_dir }}/.env"
+    state: link
+
 - name: Ensure droplet traefik config directory exists
   ansible.builtin.file:
     path: "{{ droplet_traefik_dir }}"
@@ -129,6 +135,7 @@
     mode: "0644"
     owner: ops
     group: ops
+    force: false
 
 - name: Fetch Cloudflare origin certificates from 1Password
   ansible.builtin.command:

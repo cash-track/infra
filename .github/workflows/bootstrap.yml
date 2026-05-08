@@ -1,0 +1,59 @@
+name: bootstrap
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ansible-apply-prod
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  terraform:
+    name: Terraform apply
+    runs-on: ubuntu-latest
+    environment: prod
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Install 1Password CLI
+        uses: 1password/install-cli-action@143a85f84a90555d121cde2ff5872e393a47ab9f  # v1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd  # v3
+        with:
+          terraform_version: "~> 1.10"
+
+      - name: Terraform init
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+        run: |
+          terraform init \
+            -backend-config="endpoints={s3=\"https://ams3.digitaloceanspaces.com\"}" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_metadata_api_check=true" \
+            -backend-config="skip_requesting_account_id=true" \
+            -backend-config="skip_region_validation=true" \
+            -backend-config="skip_s3_checksum=true" \
+            -backend-config="use_path_style=true"
+
+      - name: Terraform apply
+        working-directory: terraform
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+          DIGITALOCEAN_TOKEN: op://cash-track-prod/do-api/TOKEN
+          TF_VAR_tailscale_api_key: op://cash-track-prod/tailscale/API_KEY
+        run: op run -- terraform apply -auto-approve
+
+  provision:
+    name: Ansible site.yml
+    needs: terraform
+    uses: cash-track/.github/.github/workflows/ansible.yml@main
+    secrets: inherit
