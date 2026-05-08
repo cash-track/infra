@@ -35,6 +35,7 @@ VAR_NAME="${VAR_NAME//-/_}"
 DOTENV=$(readlink -f .env)
 tmp=$(mktemp)
 awk -v k="$VAR_NAME" -v v="$TAG" 'BEGIN{FS=OFS="="} $1==k{$2=v} 1' "$DOTENV" > "$tmp" && mv "$tmp" "$DOTENV"
+chown ops:ops "$DOTENV"
 
 COMPOSE="docker compose --project-name cashtrack -f compose.core.yml -f compose.app.yml -f compose.obs.yml -f compose.telegram.yml -f compose.potwora.yml"
 
