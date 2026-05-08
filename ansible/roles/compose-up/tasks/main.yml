@@ -31,6 +31,10 @@
     dest: "{{ droplet_config_dir }}/"
     delete: true
     recursive: true
+    rsync_opts:
+      # Cert PEM files are secrets deployed by compose-render (from 1Password),
+      # not tracked in the repo. Exclude them so synchronize doesn't delete them.
+      - "--exclude=*.pem"
 
 - name: Fix config tree ownership
   ansible.builtin.file:
