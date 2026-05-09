@@ -14,7 +14,6 @@ permissions:
 
 jobs:
   replace:
-    environment: prod
     uses: cash-track/.github/.github/workflows/ansible.yml@main
     with:
       playbook: replace-droplet.yml
