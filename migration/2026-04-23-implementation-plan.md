@@ -1142,10 +1142,10 @@ For each repo, in a local clone:
 
 ### Verification checklist
 
-- [ ] Each of the 7 service repos (api, gateway, frontend, website, mysql, redis, mysql-backup) has new `release.yml`, `build.yml`, and `deploy.yml` thin-caller workflows (each ≤ 25 lines).
-- [ ] The old K8s `deploy.yml` is renamed to `deploy-k8s.yml` (or removed) — never auto-fires after the cutover.
-- [ ] `actionlint` clean in each repo.
-- [ ] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image (no deploy chained), then a manual `gh workflow run deploy.yml -f tag=v0.0.0-test` SSHes to the droplet via Tailscale. Do not run migrations on scratch. This is the CI smoke test before cutover.
+- [x] Each of the 7 service repos (api, gateway, frontend, website, mysql, redis, mysql-backup) has new `release.yml`, `build.yml`, and `deploy.yml` thin-caller workflows (each ≤ 25 lines).
+- [x] The old K8s `deploy.yml` is renamed to `deploy-k8s.yml` (or removed) — never auto-fires after the cutover.
+- [x] `actionlint` clean in each repo.
+- [x] A dry-run on a scratch tag (e.g. `v0.0.0-test`) builds and pushes an image (no deploy chained), then a manual `gh workflow run deploy.yml -f tag=v0.0.0-test` SSHes to the droplet via Tailscale. Do not run migrations on scratch. This is the CI smoke test before cutover.
 
 ### Commit (per repo)
 
@@ -1178,9 +1178,9 @@ Tell operator: *"Stage 12 committed. PRs on each service repo. Merge after Stage
 
 ### Verification checklist
 
-- [ ] `actionlint` clean on all workflows in `./infra/.github/workflows/`.
-- [ ] In GitHub UI → Actions tab, the old workflows show a "Run workflow" button (dispatch-only).
-- [ ] No push to `main` re-triggers them (verified by pushing an unrelated doc change; watch the Actions tab stays empty).
+- [x] `actionlint` clean on all workflows in `./infra/.github/workflows/`.
+- [x] In GitHub UI → Actions tab, the old workflows show a "Run workflow" button (dispatch-only).
+- [x] No push to `main` re-triggers them (verified by pushing an unrelated doc change; watch the Actions tab stays empty).
 
 ### Commit
 
@@ -1247,9 +1247,9 @@ Operator: *"Stage 14 complete. Droplet is serving production traffic; K8s quiesc
 
 ### Phase A — 48h observation (OPERATOR passive)
 
-- [ ] Monitor Grafana daily for anomalies.
-- [ ] Any incident escalates: either fix on the droplet or roll back via §16 DNS flip.
-- [ ] No K8s changes during this window.
+- [x] Monitor Grafana daily for anomalies.
+- [x] Any incident escalates: either fix on the droplet or roll back via §16 DNS flip.
+- [x] No K8s changes during this window.
 
 ### Phase B — Decommission (OPERATOR-ONLY)
 
@@ -1287,11 +1287,11 @@ Operator: *"Stage 14 complete. Droplet is serving production traffic; K8s quiesc
 
 ### Verification checklist
 
-- [ ] `doctl kubernetes cluster list` — cashtrack-prod cluster gone.
-- [ ] `doctl compute load-balancer list` — old LB gone.
-- [ ] `kubectl config current-context` no longer points at DOKS (optional cleanup).
-- [ ] `./infra/.github/workflows/` contains only NEW workflows (ansible-apply, replace-droplet, bootstrap, quality).
-- [ ] `./infra/.github/workflows.disabled/` contains the old K8s deploy workflows.
+- [x] `doctl kubernetes cluster list` — cashtrack-prod cluster gone.
+- [x] `doctl compute load-balancer list` — old LB gone.
+- [x] `kubectl config current-context` no longer points at DOKS (optional cleanup).
+- [x] `./infra/.github/workflows/` contains only NEW workflows (ansible-apply, replace-droplet, bootstrap, quality).
+- [x] `./infra/.github/workflows.disabled/` contains the old K8s deploy workflows.
 - [ ] New `README.md` makes no reference to migration, Kubernetes, or "new" infra (as if the Docker Compose stack has always been there).
 
 ### Commit
