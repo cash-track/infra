@@ -16,7 +16,7 @@ POST_CMDS_B64="${3:-}"
 # Allowlist: any change here requires a privileged operator to update the
 # script on the droplet. Keep in sync with compose service names.
 case "$SERVICE" in
-  api|gateway|website|frontend|mysql|mysql-backup|redis) ;;
+  api|gateway|website|frontend|mysql|mysql-backup|mysql-backup-crashers|redis|crashers-bot|home-exporter) ;;
   *) echo "deploy-service: refusing unknown service '$SERVICE'" >&2; exit 2 ;;
 esac
 
@@ -45,13 +45,14 @@ if [[ -n "$POST_CMDS_B64" ]]; then
   # Decode and run each non-empty line inside the container.
   # Each command is validated: only alphanumerics, spaces, and safe punctuation
   # (.  /  :  -  _) are allowed — shell operators are rejected.
+  safe_cmd_re='^[A-Za-z0-9 ./:_-]{1,200}$'
   while IFS= read -r cmd; do
     [[ -z "$cmd" ]] && continue
-    if [[ ! "$cmd" =~ ^[A-Za-z0-9\ ./:\-_]{1,200}$ ]]; then
+    if [[ ! "$cmd" =~ $safe_cmd_re ]]; then
       echo "deploy-service: refusing unsafe command: $cmd" >&2; exit 2
     fi
     # shellcheck disable=SC2086
-    $COMPOSE run --rm "$SERVICE" $cmd
+    $COMPOSE run --rm --no-deps --entrypoint "" "$SERVICE" $cmd </dev/null
   done < <(printf '%s' "$POST_CMDS_B64" | base64 -d)
 fi
 
