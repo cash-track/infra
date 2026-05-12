@@ -2,6 +2,19 @@
 
 [![quality](https://github.com/cash-track/infra/actions/workflows/quality.yml/badge.svg?branch=main&event=push)](https://github.com/cash-track/infra/actions/workflows/quality.yml) [![deploy](https://github.com/cash-track/infra/actions/workflows/deploy.yml/badge.svg?branch=main&event=push)](https://github.com/cash-track/infra/actions/workflows/deploy.yml)
 
+This version of infrastructure is currently deprecated and not used. Here is the list of all dependent repositories with commits that were dependent on this version:
+- https://github.com/cash-track/infra/tree/kubernetes
+- https://github.com/cash-track/api/tree/v1.9.13
+- https://github.com/cash-track/gateway/tree/v1.3.3
+- https://github.com/cash-track/website/tree/v2.1.9
+- https://github.com/cash-track/frontend/tree/v1.9.1
+- https://github.com/cash-track/mysql/tree/v1.0.17
+- https://github.com/cash-track/mysql-backup/tree/v0.0.11
+- https://github.com/cash-track/redis/tree/v1.0.6
+- https://github.com/vokomarov/crashers-bot/tree/v1.3.3
+- https://github.com/vokomarov/home-exporter/commit/6992ff7be84a45ddf08f5e818b7075e04724d0a8
+
+
 ## Configure kubectl using doctl
 
 ```shell
