@@ -12,3 +12,4 @@ compose/config/traefik/*-key.pem
 backend.hcl
 /tmp/cashtrack-render/
 .ansible/
+ansible/inventory/prod/fixtures/tf-output.json
