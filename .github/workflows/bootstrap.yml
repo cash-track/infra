@@ -50,9 +50,10 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
           DIGITALOCEAN_TOKEN: op://cash-track-prod/do-api/TOKEN
           TF_VAR_tailscale_api_key: op://cash-track-prod/tailscale/API_KEY
+          TF_QUIET: "1"
         run: |
           set -eo pipefail
-          if [[ -n "${TF_VERBOSE:-}" ]]; then
+          if [[ -z "${TF_QUIET:-}" ]]; then
             op run -- terraform apply -auto-approve
           else
             op run -- terraform apply -auto-approve -json | jq -r '
