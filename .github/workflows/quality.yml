@@ -60,7 +60,7 @@ jobs:
       - name: Syntax check
         working-directory: ansible
         run: |
-          fixture="$(cat inventory/prod/fixtures/tf-output.json)"
+          fixture='{"reserved_ip":{"value":"192.0.2.1"},"droplet_id":{"value":"123456"},"tailscale_hostname":{"value":"cashtrack-prod"},"volume_id":{"value":"vol-abc123"}}'
           TF_OUTPUT="$fixture" ansible-playbook site.yml --syntax-check
           TF_OUTPUT="$fixture" ansible-playbook deploy.yml --syntax-check
           TF_OUTPUT="$fixture" ansible-playbook replace-droplet.yml --syntax-check

@@ -1,5 +1,7 @@
 # Cash-Track Infrastructure
 
+[![quality](https://github.com/cash-track/infra/actions/workflows/quality.yml/badge.svg?branch=main&event=push)](https://github.com/cash-track/infra/actions/workflows/quality.yml)
+
 Single-droplet Docker Compose deployment on DigitalOcean, provisioned by Terraform and configured by Ansible. Persistent state lives on an attached Block Volume; a Reserved IP fronts Cloudflare DNS.
 
 ## Layout
@@ -50,7 +52,7 @@ scripts/     bootstrap-buckets.sh, restore-to-new-volume.sh, replace-preflight.s
 Consequence: if you add a new `VERSION_*` variable to `ansible/roles/compose-render/templates/env.tpl`, you must add it to the live `.env` manually after `make deploy`:
 
 ```bash
-./ssh-prod                                          # SSH into the droplet
+./ssh-prod # SSH into the droplet
 echo "VERSION_NEWSERVICE=1.0.0" >> /mnt/data/cashtrack.env
 ```
 
@@ -64,16 +66,6 @@ make deploy
 ## Day-to-day
 
 Working machine must be connected to Tailscale before calling any operational commands.
-
-### Droplet shell
-
-SSH via Tailscale as the `ops` user. The shell drops into `/opt/cashtrack` automatically on login.
-
-```bash
-tailscale ssh ops@cashtrack-prod-0
-# or just
-./ssh-prod
-```
 
 ### Docker Compose
 
@@ -98,7 +90,111 @@ docker-obs logs -f prometheus
 docker-app restart api
 ```
 
-### Services
+## Production
+
+### Secrets
+
+Secrets defined in 1Password vault `cash-track-prod`. Rendered during `make bootstrap`.
+
+Render Terraform `backend.hcl` and init required credentials before initial cloud provisioning.
+
+```shell
+eval "$(op signin)"
+cat > infra/terraform/backend.hcl <<EOF
+endpoints = { s3 = "https://ams3.digitaloceanspaces.com" }
+access_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/ACCESS_KEY_ID)"
+secret_key                  = "$(op read op://cash-track-prod/cash-track-tfstate/SECRET_ACCESS_KEY)"
+skip_credentials_validation = true
+skip_metadata_api_check     = true
+skip_requesting_account_id  = true
+skip_region_validation      = true
+skip_s3_checksum            = true
+use_path_style              = true
+EOF
+chmod 600 infra/terraform/backend.hcl
+export DIGITALOCEAN_TOKEN="$(op read op://cash-track-prod/do-api/TOKEN)"
+export TF_VAR_tailscale_api_key="$(op read op://cash-track-prod/tailscale/API_KEY)"
+cd infra/terraform && terraform init -backend-config=backend.hcl
+terraform plan -out=tfplan.out
+```
+
+Check `tfplan.out` for the rendered values.
+
+### Initial Deployment
+
+```shell
+make plan
+make apply
+make wait-tailnet
+make bootstrap
+```
+
+### Deployment
+
+Deployment and operational processes for every service in the stack.
+
+#### Infrastructure
+
+```shell
+make deploy               # (re) deploy docker compose stack only
+make bootstrap            # fully provision server with docker compose stack and dependencies
+make replace              # replace droplet with new one, reattach volume, and re-bootstrap
+make firewall-refresh     # sync Cloudflare IP ranges into the DO firewall
+make traefik-cf-refresh   # Refresh Cloudflare IPs in the Traefik trusted-proxy list
+```
+
+#### API
+
+```shell
+./ssh-prod deploy-service api 1.0.0    # deploy new version of docker image
+./ssh-prod docker-app logs api      # get all container logs
+./ssh-prod docker-app restart api      # restart backup container without redeploying
+./ssh-prod docker-app exec api bash    # connect to bash shell inside container
+```
+
+Commands
+
+```shell
+./ssh-prod docker-app exec api php app.php cache:clean
+./ssh-prod docker-app exec api php app.php migrate
+./ssh-prod docker-app exec api php app.php newsletter:send Newsletter\\TelegramChannelMail --test 1
+```
+
+#### Gateway
+
+```shell
+./ssh-prod deploy-service gateway 1.0.0    # deploy new version of docker image
+./ssh-prod docker-app logs gateway         # get all container logs
+./ssh-prod docker-app restart gateway      # restart backup container without redeploying
+./ssh-prod docker-app exec gateway bash    # connect to bash shell inside container
+```
+
+#### Website
+
+```shell
+./ssh-prod deploy-service website 1.0.0    # deploy new version of docker image
+./ssh-prod docker-app logs website         # get all container logs
+./ssh-prod docker-app restart website      # restart backup container without redeploying
+./ssh-prod docker-app exec website bash    # connect to bash shell inside container
+```
+
+#### Frontend
+
+```shell
+./ssh-prod deploy-service frontend 1.0.0    # deploy new version of docker image
+./ssh-prod docker-app logs frontend         # get all container logs
+./ssh-prod docker-app restart frontend      # restart backup container without redeploying
+./ssh-prod docker-app exec frontend bash    # connect to bash shell inside container
+```
+
+#### MySQL
+
+```shell
+./ssh-prod deploy-service mysql 1.0.0     # deploy new version of docker image
+./ssh-prod docker-core logs mysql         # get all container logs
+./ssh-prod docker-core restart mysql      # restart backup container without redeploying
+./ssh-prod docker-core exec mysql bash    # connect to bash shell inside container
+```
 
 #### MySQL Backup
 
@@ -118,14 +214,85 @@ Commands:
 ./ssh-prod docker-all exec mysql-backup bash                        # connect to bash shell inside container
 ```
 
+#### Redis
+
+```shell
+./ssh-prod deploy-service redis 1.0.0     # deploy new version of docker image
+./ssh-prod docker-core logs redis         # get all container logs
+./ssh-prod docker-core restart redis      # restart backup container without redeploying
+./ssh-prod docker-core exec redis bash    # connect to bash shell inside container
+```
+
+#### Third Party Services
+
+These services are deployed in a separate Docker Compose stack. Use `docker-telegram` wrapper to access them.
+
+##### Crashers Bot
+
+```shell
+./ssh-prod deploy-service crashers-bot 1.0.0         # deploy new version of docker image
+./ssh-prod docker-telegram logs crashers-bot         # get all container logs
+./ssh-prod docker-telegram restart crashers-bot      # restart backup container without redeploying
+./ssh-prod docker-telegram exec crashers-bot bash    # connect to bash shell inside
+```
+
+Launch after every deployment
+
+```shell
+./ssh-prod docker-telegram exec crashers-bot php artisan migrate --force
+./ssh-prod docker-telegram exec crashers-bot php artisan webhook:set
+```
+
+##### MySQL Backup Crashers
+
+```shell
+./ssh-prod deploy-service mysql-backup-crashers 1.0.0    # deploy new version of docker image
+./ssh-prod docker-telegram logs mysql-backup-crashers         # get all container logs
+./ssh-prod docker-telegram restart mysql-backup-crashers      # restart backup container without redeploying
+```
+
+Commands:
+
+```bash
+./ssh-prod docker-telegram exec mysql-backup-crashers php app.php list            # List available backups
+./ssh-prod docker-telegram exec mysql-backup-crashers php app.php backup          # Backup right now
+./ssh-prod docker-telegram exec mysql-backup-crashers php app.php restore <id>    # restore backup by <id>
+./ssh-prod docker-telegram exec mysql-backup-crashers php app.php clear --days=7  # delete backups older than 7 days
+./ssh-prod docker-telegram exec mysql-backup-crashers bash                        # connect to bash shell inside container
+```
+
+##### Home Exporter
+
+```shell
+./ssh-prod deploy-service home-exporter 1.0.0         # deploy new version of docker image
+./ssh-prod docker-telegram logs home-exporter         # get all container logs
+./ssh-prod docker-telegram restart home-exporter      # restart backup container without redeploying
+./ssh-prod docker-telegram exec home-exporter bash    # connect to bash shell inside
+```
+
 ## Troubleshooting
 
 ### SSH
 
-```bash 
-./ssh-prod                     # SSH into the droplet via Tailscale.
-./ssh-prod docker-all ps       # docker compose ps inside the droplet
-./ssh-prod docker-all logs api # check logs of specific service
+SSH via Tailscale as the `ops` user. The shell drops into `/opt/cashtrack` automatically on login.
+
+```bash
+tailscale ssh ops@cashtrack-prod-0
+# or just
+./ssh-prod
+
+./ssh-prod docker-all ps           # docker compose ps inside the droplet
+./ssh-prod docker-all logs api     # check logs of specific service
+./ssh-prod docker-all logs traefik # check logs related to traffic distribution
+./ssh-prod docker-all logs ofelia  # check logs related to scheduled jobs
+```
+
+If Tailscale is not working, you can open SSH to the droplet's public IP temporarily:
+
+```bash
+make ssh-open                   # Open firewall SSH for your current public IP
+ssh root@<droplet-public-ip>    # SSH using the droplet's public IP
+make ssh-close                  # Close firewall SSH for your current public IP
 ```
 
 ### Exposed Services via Tailscale
