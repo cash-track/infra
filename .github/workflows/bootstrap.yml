@@ -73,8 +73,8 @@ jobs:
             echo "::add-mask::$val"
           done
 
-  provision:
-    name: Ansible site.yml
+  ansible:
+    name: Ansible apply
     needs: terraform
     uses: cash-track/.github/.github/workflows/ansible.yml@main
     secrets: inherit
