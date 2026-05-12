@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ansible-apply-prod
+  group: bootstrap-prod
   cancel-in-progress: false
 
 permissions:
@@ -51,6 +51,16 @@ jobs:
           DIGITALOCEAN_TOKEN: op://cash-track-prod/do-api/TOKEN
           TF_VAR_tailscale_api_key: op://cash-track-prod/tailscale/API_KEY
         run: op run -- terraform apply -auto-approve
+
+      - name: Mask Terraform outputs
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+        run: |
+          terraform output -json | jq -r 'to_entries[] | .value.value | tostring' | while read -r val; do
+            echo "::add-mask::$val"
+          done
 
   provision:
     name: Ansible site.yml
