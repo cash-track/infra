@@ -50,23 +50,18 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
           DIGITALOCEAN_TOKEN: op://cash-track-prod/do-api/TOKEN
           TF_VAR_tailscale_api_key: op://cash-track-prod/tailscale/API_KEY
-          TF_QUIET: "1"
         run: |
           set -eo pipefail
-          if [[ -z "${TF_QUIET:-}" ]]; then
-            op run -- terraform apply -auto-approve
-          else
-            op run -- terraform apply -auto-approve -json | jq -r '
-              if   .type == "apply_start"    then "  applying: " + .hook.resource.addr
-              elif .type == "apply_complete" then "  done:     " + .hook.resource.addr
-              elif .type == "apply_errored"  then "  error:    " + .hook.resource.addr
-              elif .type == "change_summary" then
-                "summary: \(.changes.add) add, \(.changes.change) change, \(.changes.remove) destroy"
-              elif .type == "diagnostic" then
-                "[\(.diagnostic.severity)] \(.diagnostic.summary)"
-              else empty end
-            '
-          fi
+          op run -- terraform apply -auto-approve -json | jq -r '
+            if   .type == "apply_start"    then "  applying: " + .hook.resource.addr
+            elif .type == "apply_complete" then "  done:     " + .hook.resource.addr
+            elif .type == "apply_errored"  then "  error:    " + .hook.resource.addr
+            elif .type == "change_summary" then
+              "summary: \(.changes.add) add, \(.changes.change) change, \(.changes.remove) destroy"
+            elif .type == "diagnostic" then
+              "[\(.diagnostic.severity)] \(.diagnostic.summary)"
+            else empty end
+          '
 
       - name: Mask Terraform outputs
         working-directory: terraform
