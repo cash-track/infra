@@ -203,7 +203,7 @@ volume_tag            = "cashtrack-data"
 
 domain                = "cash-track.app"
 ssh_key_fingerprints  = ["aa:bb:cc:..."]    # fallback; primary path is Tailscale SSH
-tailscale_tags        = ["tag:prod-server"]
+tailscale_tags        = ["tag:cashtrack-prod"]
 cf_ipv4_url           = "https://www.cloudflare.com/ips-v4"
 cf_ipv6_url           = "https://www.cloudflare.com/ips-v6"
 
@@ -337,7 +337,7 @@ runcmd:
   - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
   - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
   - apt-get update && apt-get install -y tailscale
-  - tailscale up --authkey=${tailscale_authkey} --hostname=${hostname} --advertise-tags=tag:prod-server --ssh --accept-routes
+  - tailscale up --authkey=${tailscale_authkey} --hostname=${hostname} --advertise-tags=tag:cashtrack-prod --ssh --accept-routes
 
   # Docker
   - install -m 0755 -d /etc/apt/keyrings
@@ -1200,7 +1200,7 @@ jobs:
             "/opt/cashtrack/bin/deploy-service ${SERVICE} ${TAG} ${RUN_MIGRATIONS}"
 ```
 
-No infra checkout. No Ansible on the runner. No vault access. No PAT. SSH auth is Tailscale SSH, keyless — governed by the tailnet ACL granting `tag:ci` identity SSH to `tag:prod-server` as user `ops`.
+No infra checkout. No Ansible on the runner. No vault access. No PAT. SSH auth is Tailscale SSH, keyless — governed by the tailnet ACL granting `tag:ci` identity SSH to `tag:cashtrack-prod` as user `ops`.
 
 ### Caller in a service repo (`cash-track/api/.github/workflows/release.yml`)
 
@@ -1411,8 +1411,8 @@ Implemented as two Ansible playbooks using the `community.digitalocean` collecti
 
 ### Tailscale ACLs (conceptual; configured in Tailscale admin)
 
-- `tag:prod-server` — the droplet
-- `tag:ci` — ephemeral GitHub Actions runners; can SSH to `tag:prod-server` as `ops`
+- `tag:cashtrack-prod` — the droplet
+- `tag:ci` — ephemeral GitHub Actions runners; can SSH to `tag:cashtrack-prod` as `ops`
 - `group:admin` — operators; can SSH + access Grafana / Prometheus / Alertmanager
 
 Grafana and other internal dashboards are exposed through `tailscale serve` on the droplet, reachable only on the tailnet.

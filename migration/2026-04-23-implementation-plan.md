@@ -1033,12 +1033,12 @@ Tell operator: *"Stage 10 committed. Before `make deploy`: confirm the `home-exp
 2. **[OPERATOR-ONLY] Edit Tailscale ACLs** — add:
    ```json
    {
-     "tagOwners": { "tag:ci": ["autogroup:admin"], "tag:prod-server": ["autogroup:admin"] },
+     "tagOwners": { "tag:ci": ["autogroup:admin"], "tag:cashtrack-prod": ["autogroup:admin"] },
      "acls": [
-       { "action": "accept", "src": ["tag:ci"], "dst": ["tag:prod-server:22"] }
+       { "action": "accept", "src": ["tag:ci"], "dst": ["tag:cashtrack-prod:22"] }
      ],
      "ssh": [
-       { "action": "accept", "src": ["tag:ci"], "dst": ["tag:prod-server"], "users": ["ops"] }
+       { "action": "accept", "src": ["tag:ci"], "dst": ["tag:cashtrack-prod"], "users": ["ops"] }
      ]
    }
    ```
