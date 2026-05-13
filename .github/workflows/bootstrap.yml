@@ -49,7 +49,8 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
           DIGITALOCEAN_TOKEN: op://cash-track-prod/do-api/TOKEN
-          TF_VAR_tailscale_api_key: op://cash-track-prod/tailscale/API_KEY
+          TF_VAR_tailscale_oauth_client_id: op://cash-track-prod/tailscale/OAUTH_CLIENT_ID
+          TF_VAR_tailscale_oauth_client_secret: op://cash-track-prod/tailscale/OAUTH_CLIENT_SECRET
         run: |
           set -eo pipefail
           op run -- terraform apply -auto-approve -json | jq -r '
