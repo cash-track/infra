@@ -33,7 +33,7 @@ runcmd:
   - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg | tee /usr/share/keyrings/tailscale-archive-keyring.gpg >/dev/null
   - curl -fsSL https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list | tee /etc/apt/sources.list.d/tailscale.list
   - apt-get update && apt-get install -y tailscale
-  - tailscale up --authkey=${tailscale_authkey} --hostname=${hostname} --advertise-tags=tag:prod-server --ssh --accept-routes
+  - tailscale up --authkey="${tailscale_authkey}?ephemeral=false&preauthorized=true" --hostname=${hostname} --advertise-tags=tag:cashtrack-prod --ssh --accept-routes
 
   # Docker
   - install -m 0755 -d /etc/apt/keyrings
