@@ -37,6 +37,7 @@
       - "{{ compose_source_dir }}/config/"
       - "{{ ansible_user }}@{{ ansible_host }}:{{ droplet_config_dir }}/"
   delegate_to: localhost
+  become: false
   changed_when: true
 
 - name: Fix config tree ownership
