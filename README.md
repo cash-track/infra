@@ -299,8 +299,8 @@ make ssh-close                  # Close firewall SSH for your current public IP
 
 The list of exposed services available via Tailscale.
 
-- AlertManager: [http://cashtrack-prod-0:9093](http://cashtrack-prod-0:9093)
-- Grafana: [http://cashtrack-prod-0:8081](http://cashtrack-prod-0:8081)
-- Prometheus: [http://cashtrack-prod-0:9090](http://cashtrack-prod-0:9090)
-- MySQL: `tcp://cashtrack-prod-0:3306`
-- Redis: `tcp://cashtrack-prod-0:6379`
+- AlertManager: [http://ct-prod-alertmanager](http://ct-prod-alertmanager)
+- Grafana: [http://ct-prod-grafana:8081](http://ct-prod-grafana:8081)
+- Prometheus: [http://ct-prod-prometheus](http://ct-prod-prometheus)
+- MySQL: `tcp://ct-prod-mysql:3306`
+- Redis: `tcp://ct-prod-redis:6379`
