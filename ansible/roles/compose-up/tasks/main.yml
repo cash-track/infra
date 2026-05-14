@@ -26,15 +26,19 @@
   loop: "{{ compose_files }}"
 
 - name: Upload per-service config tree
-  ansible.posix.synchronize:
-    src: "{{ compose_source_dir }}/config/"
-    dest: "{{ droplet_config_dir }}/"
-    delete: true
-    recursive: true
-    rsync_opts:
-      # Cert PEM files are secrets deployed by compose-render (from 1Password),
-      # not tracked in the repo. Exclude them so synchronize doesn't delete them.
+  ansible.builtin.command:
+    argv:
+      - rsync
+      - --archive
+      - --delete
       - "--exclude=*.pem"
+      - -e
+      - "ssh -o StrictHostKeyChecking=no"
+      - "{{ compose_source_dir }}/config/"
+      - "{{ ansible_user }}@{{ ansible_host }}:{{ droplet_config_dir }}/"
+  delegate_to: localhost
+  become: false
+  changed_when: true
 
 - name: Fix config tree ownership
   ansible.builtin.file:
