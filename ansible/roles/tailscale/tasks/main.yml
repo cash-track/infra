@@ -24,35 +24,35 @@
 # running the playbook before a stack is deployed is a no-op.
 
 - name: Publish grafana via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --http=8081 http://localhost:3000
+  ansible.builtin.command: tailscale serve --bg --service=svc:ct-prod-grafana --http=80 http://localhost:3000
   register: tailscale_serve_grafana
   changed_when: tailscale_serve_grafana.rc == 0
   failed_when: tailscale_serve_grafana.rc != 0 and 'already' not in (tailscale_serve_grafana.stderr | default(''))
   when: "'grafana' in compose_services"
 
 - name: Publish prometheus via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --http=9090 http://localhost:9090
+  ansible.builtin.command: tailscale serve --bg --service=svc:ct-prod-prometheus --http=80 http://localhost:9090
   register: tailscale_serve_prometheus
   changed_when: tailscale_serve_prometheus.rc == 0
   failed_when: tailscale_serve_prometheus.rc != 0 and 'already' not in (tailscale_serve_prometheus.stderr | default(''))
   when: "'prometheus' in compose_services"
 
 - name: Publish alertmanager via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --http=9093 http://localhost:9093
+  ansible.builtin.command: tailscale serve --bg --service=svc:ct-prod-alertmanager --http=80 http://localhost:9093
   register: tailscale_serve_alertmanager
   changed_when: tailscale_serve_alertmanager.rc == 0
   failed_when: tailscale_serve_alertmanager.rc != 0 and 'already' not in (tailscale_serve_alertmanager.stderr | default(''))
   when: "'alertmanager' in compose_services"
 
 - name: Publish mysql via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --tcp=3306 tcp://localhost:3306
+  ansible.builtin.command: tailscale serve --bg --service=svc:ct-prod-mysql --tcp=3306 tcp://localhost:3306
   register: tailscale_serve_mysql
   changed_when: tailscale_serve_mysql.rc == 0
   failed_when: tailscale_serve_mysql.rc != 0 and 'already' not in (tailscale_serve_mysql.stderr | default(''))
   when: "'mysql' in compose_services"
 
 - name: Publish redis via tailscale serve
-  ansible.builtin.command: tailscale serve --bg --tcp=6379 tcp://localhost:6379
+  ansible.builtin.command: tailscale serve --bg --service=svc:ct-prod-redis --tcp=6379 tcp://localhost:6379
   register: tailscale_serve_redis
   changed_when: tailscale_serve_redis.rc == 0
   failed_when: tailscale_serve_redis.rc != 0 and 'already' not in (tailscale_serve_redis.stderr | default(''))

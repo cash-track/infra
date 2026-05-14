@@ -1,0 +1,20 @@
+name: CF IP Refresh
+
+on:
+  schedule:
+    - cron: "0 6 * * 1"  # every Monday at 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  firewall:
+    uses: cash-track/.github/.github/workflows/ansible.yml@main
+    with:
+      playbook: ops/firewall-refresh-cf.yml
+    secrets: inherit
+
+  traefik:
+    needs: firewall
+    uses: cash-track/.github/.github/workflows/ansible.yml@main
+    with:
+      playbook: ops/traefik-refresh-cf.yml
+    secrets: inherit
