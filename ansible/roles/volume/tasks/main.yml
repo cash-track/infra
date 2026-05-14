@@ -8,7 +8,7 @@
 
 - name: Locate /mnt/data mount
   ansible.builtin.set_fact:
-    volume_data_mount: "{{ ansible_mounts | selectattr('mount', 'equalto', '/mnt/data') | list | first | default({}) }}"
+    volume_data_mount: "{{ ansible_facts['mounts'] | selectattr('mount', 'equalto', '/mnt/data') | list | first | default({}) }}"
 
 - name: Assert /mnt/data is mounted
   ansible.builtin.assert:
