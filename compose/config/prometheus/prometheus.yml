@@ -79,6 +79,10 @@ scrape_configs:
     static_configs:
       - targets: ["home-exporter:2112"]
 
+  - job_name: cadvisor
+    static_configs:
+      - targets: ["cadvisor:8080"]
+
   # Services intentionally NOT scraped:
   # - mysql:        scraped indirectly via mysql-exporter (no direct exporter)
   # - redis:        no exporter shipped (acceptable; Redis is treated as ephemeral)

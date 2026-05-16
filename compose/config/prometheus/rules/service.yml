@@ -7,33 +7,59 @@
 #                        api, gateway, loki, tempo, alertmanager,
 #                        promtail, grafana
 #
-# Frontend/website expose no metrics endpoint — their availability is covered
-# by the HTTP-error-rate alerts (Traefik service metrics) and the external
-# Cloudflare/GH-Action probe per design §15.
+# Frontend/website expose no metrics endpoint — container availability is
+# covered by cAdvisor (ServiceContainerDown/ServiceContainerRestarting) and
+# HTTP-error-rate alerts (Traefik service metrics) per design §15.
 
 groups:
   - name: service.rules
     rules:
 
-      # ─── Service availability (replaces *PodDown alerts) ─────────────────
+      # ─── Service container availability (cAdvisor) ───────────────────────
+      # Single rule that fires per-service via label fan-out.
+      # Matches any container Docker Compose has labelled — no explicit allow-list,
+      # so new services are covered automatically without touching this file.
+      # `container_label_com_docker_compose_service` is set by Docker Compose on
+      # every container; the `!=""` filter excludes cAdvisor's root cgroup row.
 
-      - alert: ApiDown
-        expr: up{job="api"} == 0
-        for: 5m
+      - alert: ServiceContainerDown
+        expr: |
+          time() - container_last_seen{
+            container_label_com_docker_compose_service!=""
+          } > 120
+        for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "API target is down"
-          description: "Prometheus has been unable to scrape `api:2112` for >5m. Check `docker compose logs api`."
+          summary: "Container {{ $labels.container_label_com_docker_compose_service }} is down"
+          description: >
+            cAdvisor last saw the
+            {{ $labels.container_label_com_docker_compose_service }} container
+            {{ $value | humanizeDuration }} ago. Run
+            `docker compose ps {{ $labels.container_label_com_docker_compose_service }}`
+            and
+            `docker compose logs {{ $labels.container_label_com_docker_compose_service }}`.
 
-      - alert: GatewayDown
-        expr: up{job="gateway"} == 0
-        for: 5m
+      # ─── Container crash-loop detection ──────────────────────────────────
+      # changes() counts how many times a gauge changed value in the window.
+      # container_start_time_seconds changes on every restart, so this fires
+      # when a service has restarted more than twice in 30m.
+
+      - alert: ServiceContainerRestarting
+        expr: |
+          changes(container_start_time_seconds{
+            container_label_com_docker_compose_service!=""
+          }[30m]) > 2
+        for: 0m
         labels:
-          severity: critical
+          severity: warning
         annotations:
-          summary: "Gateway target is down"
-          description: "Prometheus has been unable to scrape `gateway:8081` for >5m. Check `docker compose logs gateway`."
+          summary: "Container {{ $labels.container_label_com_docker_compose_service }} restarted {{ $value | humanize }} times in 30m"
+          description: >
+            The {{ $labels.container_label_com_docker_compose_service }}
+            container has restarted more than twice in 30 minutes — likely a
+            crash-loop. Check
+            `docker compose logs --tail=100 {{ $labels.container_label_com_docker_compose_service }}`.
 
       - alert: MySQLExporterDown
         expr: up{job="mysql-exporter"} == 0
