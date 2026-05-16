@@ -14,7 +14,7 @@ terraform {
     }
     tailscale = {
       source  = "tailscale/tailscale"
-      version = "0.23.0"
+      version = "0.29.0"
     }
     http = {
       source  = "hashicorp/http"
