@@ -73,6 +73,7 @@ services:
       GF_SERVER_ENABLE_GZIP: "true"
       GF_SECURITY_COOKIE_SAMESITE: "strict"
       GF_LOG_MODE: "console"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: "/var/lib/grafana-dashboards/overview.json"
     volumes:
       - /mnt/data/grafana:/var/lib/grafana
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
@@ -140,6 +141,29 @@ services:
     command: ["--config=/etc/otelcol-contrib/config.yaml"]
     mem_limit: 128m
     mem_reservation: 96m
+    oom_score_adj: 500
+
+  cadvisor:
+    image: gcr.io/cadvisor/cadvisor:v0.55.1
+    restart: always
+    networks: [app]
+    # Needs privileged access to read cgroup hierarchy and kernel metrics.
+    privileged: true
+    devices:
+      - /dev/kmsg
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    command:
+      - --docker_only
+      - --allow_dynamic_housekeeping=false
+      - --global_housekeeping_interval=30s
+      - --housekeeping_interval=10s
+    mem_limit: 256m
+    mem_reservation: 192m
     oom_score_adj: 500
 
   promtail:
