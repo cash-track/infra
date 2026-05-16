@@ -1,0 +1,8 @@
+---
+# Prometheus exposes POST /-/reload when started with --web.enable-lifecycle.
+# Sending a reload after any config-tree upload avoids a full container restart
+# and picks up new rule files and scrape jobs immediately.
+- name: Reload Prometheus
+  ansible.builtin.command:
+    cmd: docker exec cashtrack-prometheus-1 wget -qO- --post-data='' http://localhost:9090/-/reload
+  changed_when: true
