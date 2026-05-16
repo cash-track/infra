@@ -16,17 +16,21 @@ groups:
     rules:
 
       # ─── Service container availability (cAdvisor) ───────────────────────
-      # Single rule that fires per-service via label fan-out.
-      # Matches any container Docker Compose has labelled — no explicit allow-list,
-      # so new services are covered automatically without touching this file.
+      # Aggregates per service (max) so that a fresh replacement container
+      # suppresses the stale old-container series during rolling updates.
+      # Without max(), a rolling deploy causes a false positive: cAdvisor keeps
+      # reporting the removed container's last-seen timestamp for > 120s while
+      # the new container is already healthy.
       # `container_label_com_docker_compose_service` is set by Docker Compose on
       # every container; the `!=""` filter excludes cAdvisor's root cgroup row.
 
       - alert: ServiceContainerDown
         expr: |
-          time() - container_last_seen{
-            container_label_com_docker_compose_service!=""
-          } > 120
+          (time() - max by (container_label_com_docker_compose_service) (
+            container_last_seen{
+              container_label_com_docker_compose_service!=""
+            }
+          )) > 120
         for: 2m
         labels:
           severity: critical
