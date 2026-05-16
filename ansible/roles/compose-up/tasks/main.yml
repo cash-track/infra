@@ -39,6 +39,7 @@
   delegate_to: localhost
   become: false
   changed_when: true
+  notify: Reload Prometheus
 
 - name: Fix config tree ownership
   ansible.builtin.file:
