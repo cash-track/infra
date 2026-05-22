@@ -6,6 +6,10 @@
 
 TF = terraform -chdir=terraform
 AP = cd ansible && ansible-playbook
+OP_RUN = DIGITALOCEAN_TOKEN=op://cash-track-prod/do-api/TOKEN \
+	TF_VAR_tailscale_oauth_client_id=op://cash-track-prod/tailscale/OAUTH_CLIENT_ID \
+	TF_VAR_tailscale_oauth_client_secret=op://cash-track-prod/tailscale/OAUTH_CLIENT_SECRET \
+	op run --
 
 .PHONY: plan apply wait-tailnet bootstrap replace deploy ssh-open ssh-close backup-verify backup-verify-crashers firewall-refresh traefik-cf-refresh restore-to-new-volume
 
@@ -55,7 +59,10 @@ backup-verify-crashers:
 	$(AP) ops/backup-restore-crashers.yml -e backup_id=latest -e verify_only=true
 
 firewall-refresh:
-	$(AP) ops/firewall-refresh-cf.yml
+	$(OP_RUN) $(TF) apply \
+	  -target=module.firewall \
+	  -refresh=false \
+	  -auto-approve
 
 traefik-cf-refresh:
 	$(AP) ops/traefik-refresh-cf.yml

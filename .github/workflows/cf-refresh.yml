@@ -7,10 +7,65 @@ on:
 
 jobs:
   firewall:
-    uses: cash-track/.github/.github/workflows/ansible.yml@main
-    with:
-      playbook: ops/firewall-refresh-cf.yml
-    secrets: inherit
+    name: firewall / apply
+    runs-on: ubuntu-latest
+    environment: prod
+    concurrency:
+      group: ansible-apply-prod
+      cancel-in-progress: false
+    steps:
+      - name: Checkout infra
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e  # v4.0.1
+        with:
+          terraform_version: "~> 1.10"
+
+      - name: Terraform init
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+        run: |
+          terraform init \
+            -backend-config="endpoints={s3=\"https://ams3.digitaloceanspaces.com\"}" \
+            -backend-config="skip_credentials_validation=true" \
+            -backend-config="skip_metadata_api_check=true" \
+            -backend-config="skip_requesting_account_id=true" \
+            -backend-config="skip_region_validation=true" \
+            -backend-config="skip_s3_checksum=true" \
+            -backend-config="use_path_style=true"
+
+      - name: Install 1Password CLI
+        uses: 1password/install-cli-action@8d006a0d0a4fd505af7f7ce589e7f768385ff5e4  # v3
+
+      - name: Load secrets
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_SERVICE_ACCOUNT_TOKEN }}
+        run: |
+          do_token=$(op read "op://cash-track-prod/do-api/TOKEN")
+          echo "::add-mask::$do_token"
+          echo "DIGITALOCEAN_TOKEN=$do_token" >> "$GITHUB_ENV"
+
+          ts_id=$(op read "op://cash-track-prod/tailscale/OAUTH_CLIENT_ID")
+          echo "::add-mask::$ts_id"
+          echo "TF_VAR_tailscale_oauth_client_id=$ts_id" >> "$GITHUB_ENV"
+
+          ts_secret=$(op read "op://cash-track-prod/tailscale/OAUTH_CLIENT_SECRET")
+          echo "::add-mask::$ts_secret"
+          echo "TF_VAR_tailscale_oauth_client_secret=$ts_secret" >> "$GITHUB_ENV"
+
+      - name: Apply terraform (firewall module)
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+        run: |
+          terraform apply \
+            -target=module.firewall \
+            -refresh=false \
+            -auto-approve
 
   traefik:
     needs: firewall
