@@ -159,11 +159,15 @@ services:
       - /dev/disk/:/dev/disk:ro
     command:
       - --docker_only
-      - --allow_dynamic_housekeeping=false
+      - --allow_dynamic_housekeeping=true
       - --global_housekeeping_interval=30s
       - --housekeeping_interval=10s
-    mem_limit: 256m
-    mem_reservation: 192m
+      # Disable overlayfs disk-usage scanning — on large images (1–1.25 GB) the
+      # du walk takes 3–8 min per container, saturates vda, and triggers an OOM
+      # restart loop. CPU/memory/network metrics are unaffected.
+      - --disable_metrics=disk,diskIO
+    mem_limit: 384m
+    mem_reservation: 256m
     oom_score_adj: 500
 
   promtail:
@@ -178,8 +182,8 @@ services:
     command: ["-config.file=/etc/promtail/promtail.yml"]
     depends_on:
       loki: { condition: service_started }
-    mem_limit: 128m
-    mem_reservation: 96m
+    mem_limit: 192m
+    mem_reservation: 128m
     oom_score_adj: 300
 
   alertmanager:

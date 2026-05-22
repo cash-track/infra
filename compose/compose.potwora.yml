@@ -29,6 +29,10 @@ services:
       # Block Volume persists across droplet replacements.
       # WordPress code lives at /mnt/data/potwora/public (K8s layout preserved).
       - /mnt/data/potwora:/var/www/html
+    tmpfs:
+      # Fresh on every container start — prevents stale apache2.pid from
+      # blocking Apache restart after a crash (PID reuse by s6 internals).
+      - /var/run/apache2
     labels:
       - traefik.enable=true
       - traefik.http.routers.potwora.rule=Host(`potwora.com.ua`) || Host(`www.potwora.com.ua`)
