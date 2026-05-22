@@ -63,7 +63,7 @@ jobs:
           AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
         run: |
           terraform output -json \
-            | jq -r 'to_entries[] | .value.value | tostring' \
+            | jq -r '[.. | scalars | tostring] | .[]' \
             | while read -r val; do echo "::add-mask::$val"; done
 
       - name: Apply terraform (firewall module)
