@@ -56,6 +56,16 @@ jobs:
           echo "::add-mask::$ts_secret"
           echo "TF_VAR_tailscale_oauth_client_secret=$ts_secret" >> "$GITHUB_ENV"
 
+      - name: Mask Terraform outputs
+        working-directory: terraform
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.SPACES_TFSTATE_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.SPACES_TFSTATE_KEY }}
+        run: |
+          terraform output -json \
+            | jq -r 'to_entries[] | .value.value | tostring' \
+            | while read -r val; do echo "::add-mask::$val"; done
+
       - name: Apply terraform (firewall module)
         working-directory: terraform
         env:
