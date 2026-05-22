@@ -20,6 +20,7 @@
           -chdir={{ terraform_dir }}
           apply
           -target=module.firewall
+          -refresh=false
           -auto-approve
       register: tf_apply
       changed_when: "'No changes' not in tf_apply.stdout"

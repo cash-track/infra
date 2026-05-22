@@ -23,4 +23,10 @@ resource "digitalocean_droplet" "host" {
     tailscale_authkey  = tailscale_tailnet_key.bootstrap.key
     volume_name        = var.volume_name
   })
+
+  lifecycle {
+    # cloud-init runs once on first boot; key rotation must not reprovision
+    # a running server.
+    ignore_changes = [user_data]
+  }
 }
