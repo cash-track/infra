@@ -29,10 +29,16 @@ services:
       # Block Volume persists across droplet replacements.
       # WordPress code lives at /mnt/data/potwora/public (K8s layout preserved).
       - /mnt/data/potwora:/var/www/html
-    tmpfs:
       # Fresh on every container start — prevents stale apache2.pid from
       # blocking Apache restart after a crash (PID reuse by s6 internals).
-      - /var/run/apache2
+      # mode 0777 is required: the image runs Apache as www-data (uid 33). A
+      # default root-owned tmpfs (0755) blocks creation of /var/run/apache2/socks.*,
+      # so Apache never binds 8080 and the healthcheck fails. Regression from
+      # ad77f54, which added this tmpfs in short form without a mode.
+      - type: tmpfs
+        target: /var/run/apache2
+        tmpfs:
+          mode: 0777
     labels:
       - traefik.enable=true
       - traefik.http.routers.potwora.rule=Host(`potwora.com.ua`) || Host(`www.potwora.com.ua`)
