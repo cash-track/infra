@@ -54,8 +54,9 @@ services:
     image: cashtrack/frontend:${VERSION_FRONTEND}
     restart: always
     networks: [app]
-    # The image's entrypoint substitutes VUE_APP_* into the served bundle /
-    # nginx config at start (matches infra/services/frontend/deployment.yml).
+    # The image's entrypoint injects VITE_WEBSITE_URL / VITE_GATEWAY_URL into
+    # window.__APP_CONFIG__ in the served index.html at start (and fails fast if
+    # either is unset). Legacy VUE_APP_* are kept in the env file for rollback only.
     env_file: [secrets/frontend.env]
     labels:
       - traefik.enable=true
