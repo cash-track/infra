@@ -4,6 +4,7 @@
 GATEWAY_ADDRESS=:8081
 GATEWAY_COMPRESS=true
 DEBUG_HTTP=false
+TRACE_CAPTURE_BODY=true
 HTTPS_ENABLED=false
 CORS_ALLOWED_ORIGINS=https://cash-track.app,https://my.cash-track.app
 REDIS_CONNECTION=redis:6379
