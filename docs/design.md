@@ -550,6 +550,30 @@ Grafana and internal dashboards are exposed via `tailscale serve`, reachable onl
 
 Traefik's `cloudflare-only` IP allowlist middleware is applied to all external routers. If the DO Firewall's CF IP list ever lags behind a CF range update, Traefik still rejects non-CF source IPs.
 
+### Cloudflare zone cache configuration
+
+Cloudflare's default "Cache Everything by extension" behavior edge-caches static file types including `.js`, and the zone's Browser Cache TTL setting can override the origin's `Cache-Control` header — rewriting the frontend's `no-cache, no-store, must-revalidate` on `sw.js` to a fixed `max-age` (observed: `14400`, i.e. 4h). Left unmitigated, this delays service worker update discovery — and therefore SPA deploy propagation to already-open tabs — by up to 4 hours after every release (cash-track/frontend#106).
+
+**Required zone settings (`my.cash-track.app`):**
+
+- **Cache Rule — Bypass cache** for `my.cash-track.app/sw.js`. Required so the service worker script is never edge- or browser-cached, independent of the Browser Cache TTL setting below.
+- **Browser Cache TTL — Respect Existing Headers.** Stops Cloudflare from overriding origin-set `Cache-Control` on any other response.
+
+**Verification:**
+
+```bash
+curl -sI https://my.cash-track.app/sw.js
+```
+
+Expect both:
+
+```
+cache-control: no-cache, no-store, must-revalidate
+cf-cache-status: BYPASS
+```
+
+If `cf-cache-status` comes back `HIT`/`DYNAMIC`/`EXPIRED` instead of `BYPASS`, or `cache-control` shows a `max-age`, the Cache Rule is missing or misconfigured — fix it in the Cloudflare dashboard (Caching → Cache Rules) before chasing stale-SW reports downstream.
+
 ---
 
 ## 14. Observability
