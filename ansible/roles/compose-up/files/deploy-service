@@ -46,7 +46,10 @@ if [[ -n "$POST_CMDS_B64" ]]; then
   # Each command is validated: only alphanumerics, spaces, and safe punctuation
   # (.  /  :  -  _) are allowed — shell operators are rejected.
   safe_cmd_re='^[A-Za-z0-9 ./:_-]{1,200}$'
-  while IFS= read -r cmd; do
+  # `|| [[ -n "$cmd" ]]` also runs the loop body for a final line with no
+  # trailing newline — without it, `read` fails on EOF before the newline-less
+  # single-command case (e.g. one migrate command) ever reaches the body.
+  while IFS= read -r cmd || [[ -n "$cmd" ]]; do
     [[ -z "$cmd" ]] && continue
     if [[ ! "$cmd" =~ $safe_cmd_re ]]; then
       echo "deploy-service: refusing unsafe command: $cmd" >&2; exit 2
