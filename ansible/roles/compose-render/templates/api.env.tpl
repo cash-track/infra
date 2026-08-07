@@ -60,6 +60,7 @@ DB_ENCRYPTER_KEY={{ op_prefix }}/api/DB_ENCRYPTER_KEY
 # common vault — shared with gateway / website / mysql-backup
 CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
 CAPTCHA_SECRET_KEY={{ op_prefix }}/common/CAPTCHA_SECRET_KEY
+GATEWAY_SECRET={{ op_prefix }}/common/GATEWAY_SECRET
 GOOGLE_API_CLIENT_ID={{ op_prefix }}/common/GOOGLE_API_CLIENT_ID
 GOOGLE_API_CLIENT_SECRET={{ op_prefix }}/common/GOOGLE_API_CLIENT_SECRET
 GOOGLE_API_PROJECT_ID={{ op_prefix }}/common/GOOGLE_API_PROJECT_ID
