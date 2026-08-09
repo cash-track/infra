@@ -56,6 +56,8 @@ JWT_PUBLIC_KEY={{ op_prefix }}/api/JWT_PUBLIC_KEY
 JWT_PRIVATE_KEY={{ op_prefix }}/api/JWT_PRIVATE_KEY
 ENCRYPTER_KEY={{ op_prefix }}/api/ENCRYPTER_KEY
 DB_ENCRYPTER_KEY={{ op_prefix }}/api/DB_ENCRYPTER_KEY
+ACCESS_TOKEN_PUBLIC_KEY={{ op_prefix }}/api/ACCESS_TOKEN_PUBLIC_KEY
+ACCESS_TOKEN_PRIVATE_KEY={{ op_prefix }}/api/ACCESS_TOKEN_PRIVATE_KEY
 
 # common vault — shared with gateway / website / mysql-backup
 CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
