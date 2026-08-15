@@ -25,7 +25,6 @@ CDN_BUCKET=cash-track-storage
 MAIL_DRIVER=smtp
 MAIL_SENDER_NAME=Cash Track
 MAIL_SENDER_ADDRESS=support@mail.cash-track.app
-CORS_ALLOWED_ORIGINS=https://cash-track.app,https://my.cash-track.app
 RR_HTTP_NUM_WORKERS=6
 AUTH_PASSKEY_SERVICE_ID=cash-track.app
 AUTH_PASSKEY_SERVICE_NAME=Cash Track
