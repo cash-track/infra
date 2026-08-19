@@ -47,3 +47,17 @@
   loop: "{{ volume_subdir_owners | dict2items }}"
   loop_control:
     label: "{{ item.key }} (uid={{ item.value }})"
+
+# recipes-bot's yt-dlp/ffmpeg scratch mount. Kept out of volume_subdir_owners
+# because it needs 0750 (not the generic 0755) — scratch holds
+# attacker-influenced downloaded bytes and has no reason to be world-readable
+# — and uid 10001 is the image's `app` user, not a per-service convention
+# shared with the rest of that dict. Docker would otherwise create this
+# root-owned on first `up`, and the bot fails its writability check at boot.
+- name: Create recipes-bot scratch subdirectory
+  ansible.builtin.file:
+    path: /mnt/data/recipes-bot/scratch
+    state: directory
+    owner: "10001"
+    group: "10001"
+    mode: "0750"

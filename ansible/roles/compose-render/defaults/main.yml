@@ -27,6 +27,7 @@ secret_files:
   - grafana
   - crashers-bot
   - home-exporter
+  - recipes-bot
   - potwora
   - potwora-backup
 

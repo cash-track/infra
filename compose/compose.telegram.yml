@@ -1,12 +1,13 @@
 # Telegram-namespace apps. crashers-bot is a Laravel HTTP bot (Telegram webhook
 # receiver + scheduler); home-exporter is a Prometheus-style exporter that
-# ICMP-pings remote hosts and reports state to Telegram. Both source repos live
+# ICMP-pings remote hosts and reports state to Telegram; recipes-bot turns
+# social-media recipe links into Notion pages. All three source repos live
 # outside the cash-track GitHub org, so their images are pulled from the upstream
 # `vovanms/*` Docker Hub namespace (public, no imagePullSecrets — matches the
-# K8s deployments). The cash-track org-level release workflow (Stage 11/12) does
-# NOT manage these images; the operator bumps `versions.crashers_bot` /
-# `versions.home_exporter` in `group_vars/all/main.yml` when a new upstream tag
-# ships.
+# K8s deployments where applicable). The cash-track org-level release workflow
+# (Stage 11/12) does NOT manage these images; the operator bumps
+# `versions.crashers_bot` / `versions.home_exporter` / `versions.recipes_bot`
+# in `group_vars/all/main.yml` when a new upstream tag ships.
 
 networks:
   app:
@@ -91,3 +92,38 @@ services:
     mem_limit: 128m
     mem_reservation: 96m
     oom_score_adj: 0
+
+  recipes-bot:
+    image: vovanms/recipes_bot:${VERSION_RECIPES_BOT}
+    restart: always
+    networks: [app]
+    env_file: [secrets/recipes-bot.env]
+    volumes:
+      # Scratch for yt-dlp/ffmpeg. Disk-backed on purpose, NOT tmpfs: tmpfs
+      # pages are charged to this container's memory cgroup, so a 200 MB video
+      # in scratch would count against mem_limit twice over and OOM-kill the
+      # process mid-job. /mnt/data is the block volume, directory owned by
+      # uid/gid 10001 via ansible/roles/volume (see docs/DEPLOYMENT.md §3).
+      - /mnt/data/recipes-bot/scratch:/tmp/recipes:rw,noexec,nosuid
+      # Instagram cookie jar — not wired up yet. Add
+      # `./secrets/recipes-bot/cookies.txt:/app/cookies.txt:ro` here, plus the
+      # matching secret_config_files entry in group_vars/all/main.yml and
+      # compose-render/defaults/main.yml, and YTDLP_COOKIES_FILE in the env
+      # template, once cookies are actually provisioned in 1Password
+      # (docs/DEPLOYMENT.md §3 step 1, runbook §6 "Downloads failing").
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/recipes-bot", "-healthcheck"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    labels:
+      - traefik.enable=true
+      - traefik.http.routers.recipes-bot.rule=Host(`recipes-bot.${DOMAIN}`)
+      - traefik.http.routers.recipes-bot.entrypoints=websecure
+      - traefik.http.routers.recipes-bot.tls=true
+      - traefik.http.services.recipes-bot.loadbalancer.server.port=8080
+      - traefik.http.routers.recipes-bot.middlewares=cloudflare-only@file
+    mem_limit: 512m
+    mem_reservation: 192m
+    oom_score_adj: -100

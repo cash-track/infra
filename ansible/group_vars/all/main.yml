@@ -17,6 +17,9 @@ versions:
   # the org `ship-service.yml` workflow.
   crashers_bot: "1.3.3"
   home_exporter: "0.0.4"
+  # vovanms/recipes_bot image, same outside-the-org pattern as crashers_bot /
+  # home_exporter above — pulled from Docker Hub, bumped by hand.
+  recipes_bot: "0.1.0"
   # vovanms/wordpress-backup image, used by the potwora-backup service.
   # Built from potwora/deploy/Dockerfile.backup and pushed manually
   # (same pattern as crashers_bot / home_exporter).
@@ -55,6 +58,7 @@ secret_files:
   - grafana
   - crashers-bot
   - home-exporter
+  - recipes-bot
   - potwora
   - potwora-backup
 
