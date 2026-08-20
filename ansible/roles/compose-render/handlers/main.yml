@@ -89,6 +89,13 @@
     services: [home-exporter]
     state: restarted
 
+- name: Restart recipes-bot
+  community.docker.docker_compose_v2:
+    project_src: "{{ droplet_project_dir }}"
+    files: "{{ compose_files }}"
+    services: [recipes-bot]
+    state: restarted
+
 - name: Restart potwora
   community.docker.docker_compose_v2:
     project_src: "{{ droplet_project_dir }}"
