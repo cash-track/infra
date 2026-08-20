@@ -11,4 +11,5 @@ VERSION_MYSQL_BACKUP={{ versions.mysql_backup }}
 VERSION_REDIS={{ versions.redis }}
 VERSION_CRASHERS_BOT={{ versions.crashers_bot }}
 VERSION_HOME_EXPORTER={{ versions.home_exporter }}
+VERSION_RECIPES_BOT={{ versions.recipes_bot }}
 VERSION_POTWORA_BACKUP={{ versions.potwora_backup }}
