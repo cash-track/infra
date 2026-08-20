@@ -16,7 +16,7 @@ POST_CMDS_B64="${3:-}"
 # Allowlist: any change here requires a privileged operator to update the
 # script on the droplet. Keep in sync with compose service names.
 case "$SERVICE" in
-  api|gateway|website|frontend|mysql|mysql-backup|mysql-backup-crashers|redis|crashers-bot|home-exporter) ;;
+  api|gateway|website|frontend|mysql|mysql-backup|mysql-backup-crashers|redis|crashers-bot|home-exporter|recipes-bot) ;;
   *) echo "deploy-service: refusing unknown service '$SERVICE'" >&2; exit 2 ;;
 esac
 
