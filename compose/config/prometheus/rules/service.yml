@@ -5,7 +5,8 @@
 #
 #   prometheus.yml jobs: prometheus, traefik, node-exporter, mysql-exporter,
 #                        api, gateway, loki, tempo, alertmanager,
-#                        promtail, grafana
+#                        promtail, grafana, home-exporter, cadvisor,
+#                        recipes-bot
 #
 # Frontend/website expose no metrics endpoint — container availability is
 # covered by cAdvisor (ServiceContainerDown/ServiceContainerRestarting) and
@@ -91,6 +92,24 @@ groups:
         annotations:
           summary: "Scrape target {{ $labels.job }} ({{ $labels.instance }}) has been down for 15m"
           description: "Investigate the listed container; if intentionally removed, drop the scrape job from prometheus.yml."
+
+      # ─── recipes-bot job outcomes ─────────────────────────────────────
+      # recipes_jobs_total{result}, result one of success|failed|exists
+      # (docs/ARCHITECTURE.md §14 in recipes-automation). "failed" is that
+      # package's actual label — IMPLEMENTATION_PLAN.md task 13.9 names the
+      # metric with result="error", but no such label is ever emitted;
+      # "failed" is what's real. A raw increase() rather than a rate ratio:
+      # the bot's traffic is low-volume enough that a percentage threshold
+      # would either never fire or need constant retuning — any failure in
+      # the last hour is the signal an operator actually wants to see.
+      - alert: RecipesBotJobFailures
+        expr: sum(increase(recipes_jobs_total{result="failed"}[1h])) > 0
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "recipes-bot: {{ $value }} failed job(s) in the last hour"
+          description: "Check `docker compose logs recipes-bot` for the failing stage; recipes_stage_failures_total{stage} on the Recipes Bot dashboard narrows it down."
 
       # ─── HTTP error / latency (Traefik service metrics) ──────────────────
       # Traefik's Docker provider names services `<container>@docker`.

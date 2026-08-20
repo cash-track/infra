@@ -52,7 +52,24 @@ groups:
           description: "Sustained disk saturation; review concurrent workloads (MySQL, Loki compactor, Prometheus WAL flush, mysql-backup window)."
 
       # Filesystem capacity — Block Volume mounted at /mnt/data carries MySQL +
-      # observability stack data. Catch growth before it stalls writes.
+      # observability stack data, plus recipes-bot's yt-dlp/ffmpeg scratch
+      # (recipes-automation IMPLEMENTATION_PLAN.md 13.9b: disk-backed on
+      # purpose, so a wedged janitor there is a disk-capacity problem, not a
+      # self-clearing memory one). Two-stage ladder: warning at 80% gives an
+      # operator time to look before HostDataVolumeFull's 90% critical fires.
+      - alert: HostDataVolumeElevated
+        expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/mnt/data"} * 100) / node_filesystem_size_bytes{mountpoint="/mnt/data"})) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Data volume on {{ $labels.instance }} is {{ $value }}% full"
+          description: >
+            /mnt/data above 80% — check recipes-bot's scratch dir
+            (/mnt/data/recipes-bot/scratch, janitor stuck?) alongside
+            Loki/Prom/Tempo retention and MySQL growth before it hits the
+            90% critical threshold.
+
       - alert: HostDataVolumeFull
         expr: round(100 - ((node_filesystem_avail_bytes{mountpoint="/mnt/data"} * 100) / node_filesystem_size_bytes{mountpoint="/mnt/data"})) > 90
         for: 5m
