@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# PATH-resolvable entry point for interactive operators (ops, via ./ssh-prod).
+# The real script at /opt/cashtrack/bin/deploy-service must run as root - it
+# rewrites /mnt/data/cashtrack.env, and /mnt/data is root:root 0755, so ops
+# can't unlink the file there even though ops owns it. ops has passwordless
+# sudo, so elevate instead of failing with a raw permission error.
+set -euo pipefail
+exec sudo -n /opt/cashtrack/bin/deploy-service "$@"

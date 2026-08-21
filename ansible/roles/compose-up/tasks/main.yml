@@ -57,6 +57,19 @@
     group: root
     mode: "0755"
 
+# ops isn't covered by the `deploy` user's sudoers grant, and /opt/cashtrack/bin
+# isn't on PATH - without this, `./ssh-prod deploy-service <svc> <tag>` (the
+# documented operator workflow) fails as "command not found", and even the
+# full path fails with a permission error since deploy-service must run as
+# root to rewrite /mnt/data/cashtrack.env (root:root 0755).
+- name: Install deploy-service PATH wrapper for interactive ops use
+  ansible.builtin.copy:
+    src: deploy-service-wrapper
+    dest: /usr/local/bin/deploy-service
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Prune stopped containers
   ansible.builtin.command:
     cmd: docker container prune -f
