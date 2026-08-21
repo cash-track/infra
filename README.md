@@ -243,6 +243,15 @@ Launch after every deployment
 ./ssh-prod docker-telegram exec crashers-bot php artisan webhook:set
 ```
 
+##### Recipes Bot
+
+```shell
+./ssh-prod deploy-service recipes-bot 1.0.0         # deploy new version of docker image
+./ssh-prod docker-telegram logs recipes-bot         # get all container logs
+./ssh-prod docker-telegram restart recipes-bot      # restart backup container without redeploying
+./ssh-prod docker-telegram exec recipes-bot bash    # connect to bash shell inside
+```
+
 ##### MySQL Backup Crashers
 
 ```shell
