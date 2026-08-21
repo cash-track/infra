@@ -83,6 +83,12 @@ scrape_configs:
     static_configs:
       - targets: ["cadvisor:8080"]
 
+  # recipes-bot exposes /metrics on its main HTTP listener (METRICS_ENABLED,
+  # default true) — same port Traefik routes to.
+  - job_name: recipes-bot
+    static_configs:
+      - targets: ["recipes-bot:8080"]
+
   # Services intentionally NOT scraped:
   # - mysql:        scraped indirectly via mysql-exporter (no direct exporter)
   # - redis:        no exporter shipped (acceptable; Redis is treated as ephemeral)
