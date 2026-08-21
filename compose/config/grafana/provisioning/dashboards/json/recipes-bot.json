@@ -440,7 +440,7 @@
         "type": "prometheus",
         "uid": "prometheus"
       },
-      "description": "recipes_tier_resolved_total{tier} \u2014 jobs whose recipe was produced by each generation tier (\u00a76, D3).",
+      "description": "recipes_tier_resolved_total{tier} \u2014 richest source tier that produced each job's recipe: 1 metadata only, 2 YouTube captions fallback, 3 full video transcript (D23). No longer an escalation-attempt counter \u2014 tier 3 is acquired unconditionally whenever RECIPE_TIER_MAX allows it.",
       "fieldConfig": {
         "defaults": {
           "color": {
@@ -496,7 +496,7 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
+        "w": 12,
         "x": 0,
         "y": 11
       },
@@ -527,102 +527,7 @@
           "refId": "A"
         }
       ],
-      "title": "Tier Resolved",
-      "type": "timeseries"
-    },
-    {
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "description": "recipes_tier_escalations_total{from,to} \u2014 moves from one attempted tier to the next.",
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisBorderShow": false,
-            "axisCenteredZero": false,
-            "axisColorMode": "text",
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "barWidthFactor": 0.6,
-            "drawStyle": "line",
-            "fillOpacity": 10,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "insertNulls": false,
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "type": "linear"
-            },
-            "showPoints": "never",
-            "spanNulls": false,
-            "stacking": {
-              "group": "A",
-              "mode": "none"
-            },
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "links": [],
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          },
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 8,
-        "w": 8,
-        "x": 8,
-        "y": 11
-      },
-      "id": 7,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom",
-          "showLegend": true
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "pluginVersion": "11.4.0",
-      "targets": [
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "prometheus"
-          },
-          "editorMode": "code",
-          "expr": "sum by (from, to) (rate(recipes_tier_escalations_total[$__interval]))",
-          "legendFormat": "{{ from }} \u2192 {{ to }}",
-          "queryType": "range",
-          "refId": "A"
-        }
-      ],
-      "title": "Tier Escalations",
+      "title": "Source Tier Used",
       "type": "timeseries"
     },
     {
@@ -686,8 +591,8 @@
       },
       "gridPos": {
         "h": 8,
-        "w": 8,
-        "x": 16,
+        "w": 12,
+        "x": 12,
         "y": 11
       },
       "id": 8,
