@@ -1,0 +1,92 @@
+# Application-level rules — driven by the app_* metrics the PHP API exposes on
+# api:2112 and the gateway_* metrics the gateway exposes on gateway:8081.
+# These sit alongside the infra alerts in service.yml/host.yml: they watch
+# business-facing health (auth, DB latency, the gateway↔API hop) rather than
+# container/host liveness. All warning severity — none page on their own, they
+# add context to a concurrent critical.
+#
+# Metric sources:
+#   app_*     — infra target `api`     (cash-track/api  Bootloader/MetricsBootloader)
+#   gateway_* — infra target `gateway` (cash-track/gateway promauto collectors)
+
+groups:
+  - name: app.rules
+    rules:
+
+      # The app_users{state} gauge is refreshed every 5 min by the API
+      # scheduler. If it disappears while the api target is up, the scheduler
+      # job (or the whole metrics bootloader) has stopped emitting.
+      - alert: AppUserGaugeMissing
+        expr: |
+          absent(app_users) and on() (up{job="api"} == 1)
+        for: 30m
+        labels:
+          severity: warning
+        annotations:
+          summary: "app_users gauge absent while the API is up"
+          description: >
+            The api target is up but no app_users series is present. The
+            scheduler job that refreshes the gauge, or the app metrics
+            bootloader, has likely stopped. Check the API scheduler logs.
+
+      # Sustained high share of failed logins across all methods — a broken
+      # login path or a credential-stuffing run.
+      - alert: AppLoginFailureRateHigh
+        expr: |
+          sum(rate(app_auth_logins_total{result="failure"}[15m]))
+            / clamp_min(sum(rate(app_auth_logins_total[15m])), 1) > 0.7
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 70% of logins are failing (15m)"
+          description: >
+            {{ $value | humanizePercentage }} of login attempts failed over the
+            last 15 minutes. Check the API auth path and the gateway
+            gateway_auth_attempts_total{result="failure"} breakdown.
+
+      # p95 of the gateway's forwarded round trip to the PHP API. Distinct from
+      # the Traefik edge-latency alert: this isolates the gateway↔API hop.
+      - alert: GatewayUpstreamLatencyHigh
+        expr: |
+          histogram_quantile(0.95,
+            sum by (le) (rate(gateway_upstream_request_duration_seconds_bucket[5m]))) > 1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Gateway→API p95 latency above 1s (10m)"
+          description: >
+            p95 of the forwarded request to the PHP API is
+            {{ $value | humanizeDuration }}. Check API DB query latency
+            (app_db_query_duration_seconds) and RoadRunner worker saturation.
+
+      # Forwarded calls that errored before a response or returned 5xx.
+      - alert: GatewayUpstreamErrorRateHigh
+        expr: |
+          sum(rate(gateway_upstream_requests_total{status=~"5xx|error"}[5m]))
+            / clamp_min(sum(rate(gateway_upstream_requests_total[5m])), 1) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Over 20% of gateway→API calls are failing (10m)"
+          description: >
+            {{ $value | humanizePercentage }} of forwarded requests errored or
+            returned 5xx over the last 10 minutes. Check API and gateway logs.
+
+      # Genuine refresh-token rejections (session cleared, user must re-login).
+      # A sustained rate points at a signing-key rotation or a clock/TTL bug,
+      # not normal expiry churn.
+      - alert: GatewayTokenRefreshFailing
+        expr: |
+          sum(rate(gateway_token_refresh_total{result="failed"}[15m])) > 0.1
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained token-refresh rejections at the gateway (15m)"
+          description: >
+            The gateway is clearing sessions at {{ $value | humanize }}/s due to
+            rejected refresh tokens. Check API JWT signing-key config and the
+            gateway JWKS cache.

@@ -40,12 +40,14 @@ scrape_configs:
 
   # Spiral exposes its OTEL/Prometheus metrics on container port 2112 (matches
   # the K8s `name: prometheus` port on infra/services/api/service.yml).
+  # Also carries app_* business metrics (DB, auth, users, charges, wallets, tags) — see grafana/api-business.json.
   - job_name: api
     static_configs:
       - targets: ["api:2112"]
 
   # Gateway metrics live on the main HTTP listener (`prom.NewPrometheus(...)
   # .WrapHandler` in main.go). GATEWAY_ADDRESS is :8081 in the rendered env.
+  # Also carries gateway_* app metrics (captcha, auth attempts, upstream timing, token refresh) — see grafana/gateway.json.
   - job_name: gateway
     metrics_path: /metrics
     static_configs:
