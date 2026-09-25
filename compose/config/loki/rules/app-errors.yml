@@ -1,6 +1,7 @@
 # Backstop for Sentry: fires on error-log spikes even while Sentry is rate-limited
 # or unreachable. promtail lifts `level` from JSON logs: RoadRunner writes "error",
-# gateway slog writes "ERROR". Website/frontend logs are not JSON and are not covered.
+# gateway slog writes "ERROR", website's Nitro plugin writes "error" per SSR 5xx.
+# Frontend is static nginx and not covered.
 groups:
   - name: app-errors.rules
     rules:
@@ -17,3 +18,14 @@ groups:
             Error-level log volume spiked. Check Sentry first; if it shows nothing,
             Sentry may be rate-limited or down. Grafana → Explore → Loki:
             {service="{{ $labels.service }}", level=~"(?i)error"}.
+      # Website only logs SSR 5xx at error, so any one is worth a look.
+      - alert: WebsiteSSRError
+        expr: |
+          sum(count_over_time({service="website", level="error"}[10m])) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "website logged {{ $value }} SSR errors in 10m"
+          description: >
+            Server-side render failed with a 5xx. Grafana → Explore → Loki:
+            {service="website", level="error"}.
