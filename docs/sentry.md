@@ -6,11 +6,11 @@ Sentry is errors-only. Tracing stays on Tempo — every SDK disables Sentry's ow
 (`traces_sample_rate`/`EnableTracing`/`tracesSampleRate` are off in api, gateway, frontend
 and website).
 
-- **Four projects, four DSNs:**
-  - `cash-track-api` — PHP API.
-  - `cash-track-gateway` — Go gateway.
-  - `cash-track-frontend` — its own DSN, strict rate limit, Allowed Domains.
-  - `cash-track-website` — its own DSN, strict rate limit, Allowed Domains.
+- **Four projects, four DSNs** (org `cashtrack-o2`, EU region):
+  - `api` — PHP API.
+  - `gateway` — Go gateway.
+  - `frontend` — its own DSN, strict rate limit, Allowed Domains.
+  - `website` — its own DSN, strict rate limit, Allowed Domains.
 - **`trace_id` tag + `tempo` context:** api and gateway tag every event with the OTel
   `trace_id` and attach a `tempo` context whose `url` is a ready-to-click Grafana Tempo
   Explore link, built from the `SENTRY_TEMPO_URL` template (`{trace_id}` placeholder).
@@ -33,10 +33,10 @@ and website).
 ## 1. Sentry organisation setup (one-time, in the Sentry UI)
 
 1. Create four projects:
-   - `cash-track-api` (PHP).
-   - `cash-track-gateway` (Go).
-   - `cash-track-frontend` (Vue).
-   - `cash-track-website` (Vue).
+   - `api` (PHP).
+   - `gateway` (Go).
+   - `frontend` (Vue).
+   - `website` (Vue).
 2. **Client Keys (DSN) → Configure → Rate Limit**, per project:
    - api: 2000 events/hour
    - gateway: 1000 events/hour
@@ -45,17 +45,24 @@ and website).
 
    Browser DSNs are public, so their limits cap abuse and quota burn.
 3. **Browser projects → Settings → Security & Privacy → Allowed Domains:**
-   - frontend: `my.cash-track.app`
-   - website: `cash-track.app`, `www.cash-track.app`
+   - frontend: `my.cash-track.app`, `my.dev-cash-track.app`
+   - website: `cash-track.app`, `www.cash-track.app`, `dev-cash-track.app`
+
+   The dev domains let a local stack with a DSN set report too. The browser SDKs don't
+   set `environment`, so those events show up as `production`.
 4. **Inbound Filters** on the browser projects: enable browser extensions, legacy
    browsers, web crawlers, and localhost.
 5. **Org → Subscription → Spike Protection:** on.
 6. **Data scrubbing:** keep "Data Scrubber" and "Use default scrubbers" on in every
    project. This is defence in depth on top of the API's `BeforeSend`, which already
    strips request bodies and cookies.
-7. **Alerts → Create Alert → Issues**, for each project:
-   - "A new issue is created" → email.
-   - "Number of events in an issue is more than 50 in 1h" → email.
+7. **Alerts:** two alerts, each connected to all four projects, both emailing the owner:
+   - "New issue": a new issue is created → email.
+   - "Issue over 50 events in 1h": number of events in an issue is more than 50 in 1h
+     → email.
+
+   Delete Sentry's per-project default "Send a notification for high priority issues"
+   alerts; they duplicate "New issue".
 
    To jump from an issue to its trace: open the event → **Contexts → tempo → url**
    (tailnet only), or search `trace_id:<id>` across projects.
@@ -112,8 +119,8 @@ references in `ansible/roles/compose-render/templates/{api,gateway,frontend,webs
   ./infra/ssh-prod 'set -a; . /opt/cashtrack/secrets/api.env; docker run --rm -e SENTRY_DSN getsentry/sentry-cli send-event -m "sentry wiring check"'
   ```
 
-  The event should appear in `cash-track-api`. Repeat with `gateway.env` and check
-  `cash-track-gateway`. The DSN is sourced into the environment and never printed.
+  The event should appear in `api`. Repeat with `gateway.env` and check
+  `gateway`. The DSN is sourced into the environment and never printed.
 - **Trace link end-to-end:** request a non-existent resource that makes the api throw,
   or wait for a real error. Confirm the issue has a `trace_id` tag and that
   `tempo.url` opens the trace in Grafana over the tailnet.
