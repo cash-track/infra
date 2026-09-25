@@ -48,8 +48,9 @@ and website).
    - frontend: `my.cash-track.app`, `my.dev-cash-track.app`
    - website: `cash-track.app`, `www.cash-track.app`, `dev-cash-track.app`
 
-   The dev domains let a local stack with a DSN set report too. The browser SDKs don't
-   set `environment`, so those events show up as `production`.
+   The dev domains let a local stack with a DSN set report too. Its events carry
+   `environment: development` (the dev server's build mode); built images report
+   `production`.
 4. **Inbound Filters** on the browser projects: enable browser extensions, legacy
    browsers, web crawlers, and localhost.
 5. **Org → Subscription → Spike Protection:** on.
