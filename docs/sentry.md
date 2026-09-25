@@ -78,8 +78,8 @@ and website).
 
 ## 2. 1Password
 
-Do this **before** merging this infra PR — `op inject` fails the whole deploy if the
-`sentry` item doesn't exist yet. The commands below never echo a DSN.
+Do this **before** merging the infra PR — the merge deploys, and `op inject` fails the
+whole deploy if the `sentry` item doesn't exist yet. The commands below never echo a DSN.
 
 ```bash
 eval "$(op signin)"
@@ -97,13 +97,21 @@ The item is `op://cash-track-prod/sentry` with fields `API_DSN`, `GATEWAY_DSN`,
 `FRONTEND_DSN` and `WEBSITE_DSN`, matching the `SENTRY_DSN` / `VITE_SENTRY_DSN` / `NUXT_PUBLIC_SENTRY_DSN`
 references in `ansible/roles/compose-render/templates/{api,gateway,frontend,website}.env.tpl`.
 
-## 3. Deploy
+## 3. Rollout order
 
-1. Merge and release the api, gateway, frontend and website PRs first. They are no-ops
-   without a DSN, so this is safe before the 1Password item exists.
-2. Create the 1Password item (§2 above).
-3. Then `make deploy`, which re-renders the env files, recreates loki with the rules
-   mount, and restarts the services.
+Merging to infra `main` **is** the deploy: `.github/workflows/ansible.yml` runs
+`site.yml` against prod on every push touching `ansible/`, `compose/` or `terraform/`.
+
+1. Create the 1Password item (§2). Hard requirement: without it the deploy triggered
+   by the infra merge fails at `op inject`.
+2. Merge and release the api, gateway, frontend and website Sentry PRs. They are no-ops
+   until the env files carry a DSN, so they can ship any time before step 3.
+3. Merge the infra PR. CI re-renders the env files, recreates loki with the rules mount
+   and restarts the services. Run `make deploy` only if that CI run failed.
+4. Verify (§4).
+
+Order between steps 2 and 3 is not a hard constraint: current images ignore the new
+`SENTRY_*` variables. Apps first just means Sentry is live as soon as step 3 finishes.
 
 ## 4. Verify (operator, after deploy)
 
