@@ -21,9 +21,10 @@ and website).
   a warning if api or gateway log more than 20 ERROR+ records in 10 minutes, whether or
   not Sentry is reachable.
 - **Non-goals (deliberate):**
-  - Caught-and-logged API errors (`$this->logger->error(...)`) are not sent to Sentry —
-    only unhandled exceptions are. A Monolog→Sentry bridge would duplicate every one of
-    those, since `LoggerReporter` already logs them.
+  - Caught-and-logged API errors reach Sentry only when logged with an `'exception'`
+    context (`ExceptionToSentryIssueHandler`); plain error lines stay in Loki.
+    `BeforeSend` drops a repeat of the same exception instance, so a logged-then-reported
+    exception is one event.
   - Website SSR (Nitro) errors are not captured — `@sentry/nuxt` server-side capture
     needs a Node `--import` preload the deploy doesn't set up. The website is mostly
     static.
