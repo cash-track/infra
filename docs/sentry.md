@@ -6,9 +6,9 @@ Sentry is errors-only. Tracing stays on Tempo — every SDK disables Sentry's ow
 (`traces_sample_rate`/`EnableTracing`/`tracesSampleRate` are off in api, gateway, frontend
 and website).
 
-- **Three projects, three DSNs:**
-  - `cash-track-backend` — shared by api and gateway (higher rate limit, `service` tag
-    separates the two).
+- **Four projects, four DSNs:**
+  - `cash-track-api` — PHP API.
+  - `cash-track-gateway` — Go gateway.
   - `cash-track-frontend` — its own DSN, strict rate limit, Allowed Domains.
   - `cash-track-website` — its own DSN, strict rate limit, Allowed Domains.
 - **`trace_id` tag + `tempo` context:** api and gateway tag every event with the OTel
@@ -32,13 +32,14 @@ and website).
 
 ## 1. Sentry organisation setup (one-time, in the Sentry UI)
 
-1. Create three projects:
-   - `cash-track-backend` (platform: PHP — the gateway's Go events land in the same
-     project, tagged `service=gateway`).
+1. Create four projects:
+   - `cash-track-api` (PHP).
+   - `cash-track-gateway` (Go).
    - `cash-track-frontend` (Vue).
    - `cash-track-website` (Vue).
 2. **Client Keys (DSN) → Configure → Rate Limit**, per project:
-   - backend: 3000 events/hour
+   - api: 2000 events/hour
+   - gateway: 1000 events/hour
    - frontend: 300 events/hour
    - website: 100 events/hour
 
@@ -75,14 +76,17 @@ Do this **before** merging this infra PR — `op inject` fails the whole deploy 
 ```bash
 eval "$(op signin)"
 op item create --vault cash-track-prod --category "Secure Note" --title sentry \
-  "BACKEND_DSN[password]=$(pbpaste)"   # copy the backend DSN first
+  "API_DSN[password]=$(pbpaste)"   # copy the api DSN first
+op item edit --vault cash-track-prod sentry "GATEWAY_DSN[password]=$(pbpaste)"
 op item edit --vault cash-track-prod sentry "FRONTEND_DSN[password]=$(pbpaste)"
 op item edit --vault cash-track-prod sentry "WEBSITE_DSN[password]=$(pbpaste)"
-op read op://cash-track-prod/sentry/BACKEND_DSN >/dev/null && echo ok   # existence check only
+for f in API_DSN GATEWAY_DSN FRONTEND_DSN WEBSITE_DSN; do
+  op read "op://cash-track-prod/sentry/$f" >/dev/null && echo "$f ok"   # existence check only
+done
 ```
 
-The item is `op://cash-track-prod/sentry` with fields `BACKEND_DSN`, `FRONTEND_DSN` and
-`WEBSITE_DSN`, matching the `SENTRY_DSN` / `VITE_SENTRY_DSN` / `NUXT_PUBLIC_SENTRY_DSN`
+The item is `op://cash-track-prod/sentry` with fields `API_DSN`, `GATEWAY_DSN`,
+`FRONTEND_DSN` and `WEBSITE_DSN`, matching the `SENTRY_DSN` / `VITE_SENTRY_DSN` / `NUXT_PUBLIC_SENTRY_DSN`
 references in `ansible/roles/compose-render/templates/{api,gateway,frontend,website}.env.tpl`.
 
 ## 3. Deploy
@@ -102,14 +106,14 @@ references in `ansible/roles/compose-render/templates/{api,gateway,frontend,webs
   ```
 
   Should list `AppErrorLogSpike`.
-- **Backend DSN works:**
+- **Server DSNs work:**
 
   ```bash
   ./infra/ssh-prod 'set -a; . /opt/cashtrack/secrets/api.env; docker run --rm -e SENTRY_DSN getsentry/sentry-cli send-event -m "sentry wiring check"'
   ```
 
-  The event should appear in `cash-track-backend`. The DSN is sourced into the
-  environment and never printed.
+  The event should appear in `cash-track-api`. Repeat with `gateway.env` and check
+  `cash-track-gateway`. The DSN is sourced into the environment and never printed.
 - **Trace link end-to-end:** request a non-existent resource that makes the api throw,
   or wait for a real error. Confirm the issue has a `trace_id` tag and that
   `tempo.url` opens the trace in Grafana over the tailnet.
