@@ -96,6 +96,8 @@ docker-app restart api
 
 Secrets defined in 1Password vault `cash-track-prod`. Rendered during `make bootstrap`.
 
+Sentry DSNs (item `sentry`): see [docs/sentry.md](docs/sentry.md).
+
 Render Terraform `backend.hcl` and init required credentials before initial cloud provisioning.
 
 ```shell

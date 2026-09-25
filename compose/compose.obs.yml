@@ -95,6 +95,7 @@ services:
     volumes:
       - /mnt/data/loki:/loki
       - ./config/loki/loki.yml:/etc/loki/local-config.yaml:ro
+      - ./config/loki/rules:/etc/loki/rules/fake:ro
     command: ["-config.file=/etc/loki/local-config.yaml"]
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:3100/ready >/dev/null"]

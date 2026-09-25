@@ -18,3 +18,6 @@ VUE_APP_BASE_URL=https://my.cash-track.app
 VUE_APP_API_URL=https://api.cash-track.app
 VUE_APP_WEBSITE_URL=https://cash-track.app
 VUE_APP_GATEWAY_URL=https://gateway.cash-track.app
+
+# Public-class DSN (shipped to browsers), strict per-key rate limit; see docs/sentry.md.
+VITE_SENTRY_DSN={{ op_prefix }}/sentry/FRONTEND_DSN
