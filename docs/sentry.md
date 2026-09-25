@@ -114,6 +114,14 @@ Merging to infra `main` **is** the deploy: `.github/workflows/ansible.yml` runs
 Order between steps 2 and 3 is not a hard constraint: current images ignore the new
 `SENTRY_*` variables. Apps first just means Sentry is live as soon as step 3 finishes.
 
+**Logging-audit follow-up** (merge after the steps above, same pattern):
+
+1. Merge and release the api, gateway, frontend and website logging-audit PRs.
+2. Merge the infra logging-audit PR (another automatic deploy). It switches
+   `QUEUE_CONNECTION` to `roadrunner`, which the current api image already supports,
+   and adds the `WebsiteSSRError` Loki rule, which stays silent until the website
+   audit release logs SSR errors as JSON.
+
 ## 4. Verify (operator, after deploy)
 
 - **Loki rule loaded:**
