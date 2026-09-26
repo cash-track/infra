@@ -15,7 +15,7 @@ CACHE_STORAGE=file
 SCHEDULER_MUTEX_CACHE_STORAGE=file
 MONOLOG_DEFAULT_LEVEL=INFO
 MONOLOG_DEFAULT_CHANNEL=roadrunner
-QUEUE_CONNECTION=sync
+QUEUE_CONNECTION=roadrunner
 CYCLE_SCHEMA_CACHE=true
 CYCLE_SCHEMA_WARMUP=true
 JWT_TTL=3600
@@ -82,3 +82,8 @@ S3_SECRET={{ op_prefix }}/common/S3_SECRET
 DB_NAME={{ op_prefix }}/mysql/MYSQL_DATABASE
 DB_USER={{ op_prefix }}/mysql/MYSQL_USER
 DB_PASSWORD={{ op_prefix }}/mysql/MYSQL_PASSWORD
+
+# Sentry — errors only (Tempo owns tracing). Own project (api); see docs/sentry.md.
+SENTRY_DSN={{ op_prefix }}/sentry/API_DSN
+SENTRY_ENVIRONMENT=production
+SENTRY_TEMPO_URL=http://ct-prod-grafana/explore?schemaVersion=1&orgId=1&panes=%7B%22t%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22{trace_id}%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-72h%22%2C%22to%22%3A%22now%22%7D%7D%7D

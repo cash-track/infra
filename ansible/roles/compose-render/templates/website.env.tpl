@@ -15,3 +15,6 @@ NUXT_PUBLIC_CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
 NUXT_PUBLIC_GOOGLE_CLIENT_ID={{ op_prefix }}/common/GOOGLE_API_CLIENT_ID
 CAPTCHA_CLIENT_KEY={{ op_prefix }}/common/CAPTCHA_CLIENT_KEY
 GOOGLE_CLIENT_ID={{ op_prefix }}/common/GOOGLE_API_CLIENT_ID
+
+# Public-class DSN (shipped to browsers), strict per-key rate limit; see docs/sentry.md.
+NUXT_PUBLIC_SENTRY_DSN={{ op_prefix }}/sentry/WEBSITE_DSN
