@@ -3,7 +3,7 @@
 # layout as the K8s PVC). DB is the shared mysql instance with an isolated
 # `potwora` database and dedicated user (see ansible/roles/mysql-init/vars/databases.yml).
 #
-# Image: serversideup/php:8.1-fpm-apache (Apache + PHP-FPM, listens on 8080).
+# Image: serversideup/php:8.5-fpm-apache (Apache + PHP-FPM, listens on 8080).
 # Same image used in K8s StatefulSet — no code changes needed for migration.
 #
 # Backup: potwora-backup runs monthly (Ofelia, 1st of month at 02:00 UTC).
@@ -19,7 +19,7 @@ networks:
 
 services:
   potwora:
-    image: serversideup/php:8.1-fpm-apache
+    image: serversideup/php:8.5-fpm-apache
     restart: always
     networks: [app]
     env_file: [secrets/potwora.env]
