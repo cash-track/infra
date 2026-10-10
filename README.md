@@ -315,3 +315,11 @@ The list of exposed services available via Tailscale.
 - Prometheus: [http://ct-prod-prometheus](http://ct-prod-prometheus)
 - MySQL: `tcp://ct-prod-mysql:3306`
 - Redis: `tcp://ct-prod-redis:6379`
+
+## License
+
+Copyright (c) Volodymyr Komarov. Source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE): free to use, modify and share
+for noncommercial purposes. Any use that earns money needs a separate license,
+see [COMMERCIAL.md](COMMERCIAL.md). Forks must not present themselves as the
+official Cash Track.
