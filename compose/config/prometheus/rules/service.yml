@@ -147,17 +147,18 @@ groups:
           description: "{{ $labels.service }} returned non-404 4xx for >80% of requests over the last 5m. Often a client misconfiguration; verify before paging."
 
       - alert: HTTPServiceHighResponseLatency
+        # 4xx excluded: scanner bursts of slow SSR 404s skew p90 at low traffic
         expr: |
           histogram_quantile(
             0.90,
-            sum by (service, le) (rate(traefik_service_request_duration_seconds_bucket{service=~"api@docker|gateway@docker|website@docker|frontend@docker"}[2m]))
+            sum by (service, le) (rate(traefik_service_request_duration_seconds_bucket{service=~"api@docker|gateway@docker|website@docker|frontend@docker",code!~"4.."}[2m]))
           ) > 1
         for: 2m
         labels:
           severity: warning
         annotations:
           summary: "HTTP service {{ $labels.service }} p90 latency {{ $value }}s"
-          description: "{{ $labels.service }} p90 response time has been >1s for 2m."
+          description: "{{ $labels.service }} p90 response time (non-4xx) has been >1s for 2m."
 
       # ─── Host resource pressure (replaces NodeHigh*Request alerts) ──────
 
