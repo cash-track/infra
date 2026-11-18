@@ -70,6 +70,16 @@
     mode: "0644"
   notify: Reload sysctl
 
+# --- Kernel modules -----------------------------------------------------
+# SCTP is unused; blocking it closes the nginx2root worker-to-root escalation path.
+- name: Block SCTP kernel module from loading
+  ansible.builtin.copy:
+    content: "install sctp /bin/false\n"
+    dest: /etc/modprobe.d/disable-sctp.conf
+    owner: root
+    group: root
+    mode: "0644"
+
 # --- Unattended upgrades + needrestart ---------------------------------
 - name: Drop maintenance-window reboot policy for unattended-upgrades
   ansible.builtin.template:
